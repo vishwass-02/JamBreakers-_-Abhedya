@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore, mode, send, CLASS_INFO } from '../store.js';
+import { api, withToken } from '../auth.js';
 import { AiSwitch, Reveal } from '../ui.jsx';
 
 let CATALOG = null;
@@ -9,7 +10,7 @@ const pct = (v) => (v == null ? '—' : `${v.toFixed(0)}%`);
 export default function Missions() {
   const S = useStore();
   const [list, setList] = useState(CATALOG);
-  useEffect(() => { if (!CATALOG) fetch('/api/scenarios').then((r) => r.json()).then((d) => { CATALOG = (d.scenarios || d).sort((a, b) => a.order - b.order); setList(CATALOG); }).catch(() => {}); }, []);
+  useEffect(() => { if (!CATALOG) api('', '/api/scenarios').then((r) => r.json()).then((d) => { CATALOG = (d.scenarios || d).sort((a, b) => a.order - b.order); setList(CATALOG); }).catch(() => {}); }, []);
   const scnId = S.hello?.scenario || null;
   const sc = list?.find((x) => x.id === scnId);
   const on = S.states.ai_on, off = S.states.ai_off, any = on || off || S.states.main;
@@ -62,7 +63,7 @@ export default function Missions() {
             <h3>Result</h3>
             <div className="vs big"><div><span>Normal radios</span><b className="bad">{pct(rep.ai_off?.delivery_attack_pct)}</b></div><div><span>With AI</span><b className="ok">{pct(rep.ai_on?.delivery_attack_pct)}</b></div></div>
             <p className="center">of messages got through the attack</p>
-            <a className="btn wide" href={`/api/report?t=${rep.t || Date.now()}`} download>⬇ Download report</a>
+            <a className="btn wide" href={withToken(`/api/report?t=${rep.t || Date.now()}`)} download>⬇ Download report</a>
             <div className="ctl">{next && <button className="primary" onClick={() => send('load_scenario', { name: next.id })}>Next mission ›</button>}
               <button onClick={() => send('restart')}>↺ Replay</button></div>
             <Reveal label="More results">

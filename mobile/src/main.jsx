@@ -1,10 +1,10 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
-import { connect } from './store.js';
+import { start } from './store.js';
 import './styles.css';
 
-connect();
+start();
 createRoot(document.getElementById('root')).render(<App />);
 
 // Offline app shell. Browsers only allow service workers on https:// or localhost; on a plain-http LAN

@@ -19,7 +19,7 @@
         "The yellow ring finds the jammer on the ridge"
       ],
       "ai_response": "CNN → barrage. Hopping is pointless when every channel is jammed, so: +3, +6, +9 dB transmit power, then QPSK → BPSK for 3 dB more margin. Hold the channel.",
-      "expected": "Fixed hopping ≈ 30–40 % delivered · AEGIS-LINK ≈ 90 %+",
+      "expected": "Fixed hopping ≈ 30–40 % delivered · ABHEDYA ≈ 90 %+",
       "camera": {
         "pos": [
           -380,
@@ -252,7 +252,7 @@
         "Buildings block links: the mesh reroutes through the drones"
       ],
       "ai_response": "CNN → random. Blacklist the channels it occupies (3 s), hop to the quietest channel left. Each time the jammer re-picks, repeat, in about 20 ms.",
-      "expected": "Fixed hopping ≈ 65–70 % · AEGIS-LINK ≈ 97 %+",
+      "expected": "Fixed hopping ≈ 65–70 % · ABHEDYA ≈ 97 %+",
       "camera": {
         "pos": [
           -330,
@@ -559,7 +559,7 @@
         "An energy detector would hop non-stop here; the CNN knows better"
       ],
       "ai_response": "CNN → sweep. It crosses every channel, so hopping only thrashes: hold the channel, raise power to +9 dB, then BPSK.",
-      "expected": "Fixed hopping ≈ 25–40 % · AEGIS-LINK ≈ 85–95 %",
+      "expected": "Fixed hopping ≈ 25–40 % · ABHEDYA ≈ 85–95 %",
       "camera": {
         "pos": [
           -420,
@@ -749,7 +749,7 @@
         "It blacklists the channel the jammer is listening on, so the jammer rarely hears us again"
       ],
       "ai_response": "CNN → reactive (its energy starts mid-packet). Switch to HMAC keyed hopping (new channel every 10 ms) and blacklist the channel it listens on.",
-      "expected": "Fixed hopping ≈ 85–88 % · AEGIS-LINK ≈ 93–95 %",
+      "expected": "Fixed hopping ≈ 85–88 % · ABHEDYA ≈ 93–95 %",
       "camera": {
         "pos": [
           -360,
@@ -948,7 +948,7 @@
         "Press Spoof or Replay to show it live"
       ],
       "ai_response": "CNN → deceptive. Authentication already rejects the forged frames; to stop the collisions too, hop away and blacklist that channel for 15 s.",
-      "expected": "Fixed hopping ≈ 90 % (but forged frames keep arriving) · AEGIS-LINK ≈ 99.8 % · forged frames accepted: 0",
+      "expected": "Fixed hopping ≈ 90 % (but forged frames keep arriving) · ABHEDYA ≈ 99.8 % · forged frames accepted: 0",
       "camera": {
         "pos": [
           -420,
@@ -1334,7 +1334,7 @@
         "The follower cannot predict HMAC(key, slot) and never catches up"
       ],
       "ai_response": "Behaviour, not just the CNN: the jammer re-finds our new channel within 30 ms, so it is a follower. Switch to HMAC keyed hopping that never reuses the last 3 channels.",
-      "expected": "Fixed hopping ≈ 10–15 % · AEGIS-LINK ≈ 99 %",
+      "expected": "Fixed hopping ≈ 10–15 % · ABHEDYA ≈ 99 %",
       "camera": {
         "pos": [
           -480,

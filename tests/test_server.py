@@ -54,7 +54,7 @@ def test_schema_endpoint_matches_file(client):
 
 def test_lan_endpoint(client):
     body = client.get("/api/lan").json()
-    assert body["port"] == 8000 and isinstance(body["ips"], list)
+    assert body["port"] == Settings().port and isinstance(body["ips"], list)   # 8000 unless AEGIS_PORT says otherwise
 
 
 def test_console_served(client):

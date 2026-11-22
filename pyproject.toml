@@ -1,0 +1,20 @@
+[project]
+name = "abhedya"
+version = "1.0.0"
+description = "ABHEDYA: AI-driven adaptive anti-jamming for tactical radio networks (BITS2WAVE SW-26, team JamBreakers). Simulation and demo."
+requires-python = ">=3.10"
+readme = "README.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 130
+extend-exclude = [".venv", "node_modules", "dist", "intro", "mobile"]
+
+[tool.ruff.lint]
+# pyflakes (real errors), pycodestyle errors/warnings, bugbear (likely bugs)
+select = ["E", "F", "W", "B"]
+# House style, chosen on purpose: compact one-line statements in numeric code, single-letter physics names
+# (l, I, O appear in formulas), and zip() over arrays that are equal length by construction.
+ignore = ["E501", "E701", "E702", "E741", "B905"]

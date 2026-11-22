@@ -76,7 +76,7 @@ def test_mission_log_records_decisions_and_downloads():
     kinds = {r["kind"] for r in a.log.rows}
     assert {"kpi", "event", "security", "decision"} <= kinds
     csv_text = a.log.to_csv()
-    assert csv_text.startswith("# AEGIS-LINK mission log") and "sim_time_s,world,kind" in csv_text
+    assert csv_text.startswith("# ABHEDYA mission log") and "sim_time_s,world,kind" in csv_text
     with TestClient(create_app()) as c:
         r = c.get("/api/mission-log")
         assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]

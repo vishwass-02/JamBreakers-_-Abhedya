@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from sim.radio import N_CH, NOISE_INBAND_DBM
+from sim.radio import NOISE_INBAND_DBM
 
 HOT_DB = 10.0
 WINDOW_SLOTS = 50                     # 0.5 s of slots

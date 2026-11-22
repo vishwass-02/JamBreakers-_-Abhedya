@@ -1,4 +1,4 @@
-# mobile/ — AEGIS-LINK phone app (React PWA, Phase 5)
+# mobile/ — ABHEDYA phone app (React PWA, Phase 5)
 
 The operator's controller. It connects to the same WebSocket as the 3D view, so anything done on a
 phone shows on the big screen at once.

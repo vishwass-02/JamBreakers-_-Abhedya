@@ -25,6 +25,15 @@ export default function Live({ go }) {
   const atk = scn && k?.delivery_attack_pct != null;
   const delivery = k ? (atk ? k.delivery_attack_pct : k.delivery_pct) : null;
   const active = st?.jammers.filter((j) => j.active) || [];
+  // no attack (yet): the reading is honestly 100 % whether the AI is on or off, so say so instead of looking broken
+  const calm = !!st && !active.length && !(atk && k.delivery_attack_pct < 99.5);
+  const canControl = !S.me || S.me.local || S.me.role === 'commander';
+  const testAttack = () => {
+    const ns = (st?.nodes || []).filter((n) => n.pos);
+    if (!ns.length) return;
+    const cx = ns.reduce((a, n) => a + n.pos[0], 0) / ns.length, cy = ns.reduce((a, n) => a + n.pos[1], 0) / ns.length;
+    send('launch_jammer', { jammer_type: 'follower', pos: [Math.round(cx + 30), Math.round(cy + 30)] });
+  };
   const v = sp?.verdict && sp.verdict !== 'clean' ? sp.verdict : null;
   const what = v ? SIMPLE[v] || SIMPLE.unknown : null;
   const lowBat = (st?.nodes || []).filter((n) => n.battery_pct != null).sort((a, b) => a.battery_pct - b.battery_pct)[0];
@@ -39,9 +48,15 @@ export default function Live({ go }) {
       </section>
 
       <section className="card hero">
-        <Gauge value={delivery} label="of messages getting through" />
+        <Gauge value={delivery} label={calm ? 'getting through: no jammer yet' : 'of messages getting through'} />
         <AiSwitch on={aiOn} onChange={flip} />
         <p className="hint-line">{aiOn ? 'AI is protecting the network' : 'AI is off: normal radios, no protection'}</p>
+        {calm && (
+          <div className="calm-note">
+            <p>With no jammer, every radio works, so <b>AI OFF and AI ON both read 100 %</b>. Start an attack to see the difference.</p>
+            {canControl && !scn && <button className="btn primary wide" onClick={testAttack}>Launch a test jammer</button>}
+          </div>
+        )}
       </section>
 
       <section className="card threat-simple" style={{ '--c': v ? CLASS_INFO[v]?.color : 'var(--mute)' }}>

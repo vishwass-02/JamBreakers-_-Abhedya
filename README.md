@@ -1,14 +1,80 @@
-# AEGIS-LINK
+# ABHEDYA
 
-AI-enabled adaptive anti-jamming for tactical drone and vehicle networks.
-Team JamBreakers · BITS2WAVE round 2 · SW-26 (software track).
+[![CI](https://github.com/vishwass-02/JamBreakers-_-Abhedya/actions/workflows/ci.yml/badge.svg)](https://github.com/vishwass-02/JamBreakers-_-Abhedya/actions/workflows/ci.yml)
 
-> **Status: all phases done (0-9).** Simulated radio world with 9 jammer types including a learning
-> one and one the AI never saw, a CNN defender (94 % live accuracy, Grad-CAM, says "unknown" when it doesn't
-> know), a hybrid CNN + RL controller behind a safety guard, battery-aware drones, real AES-256-GCM on every
-> packet, 7 guided scenarios, a phone app joined by QR, and a seed-replayed benchmark where AI ON delivers
-> **95.1 %** of packets under attack (95 % CI 94.3–95.9, 10 seeds) vs **54.3 %** for conventional fixed hopping
-> ([docs/BENCHMARK.md](docs/BENCHMARK.md), robustness: [docs/ROBUSTNESS.md](docs/ROBUSTNESS.md)). All results are simulated. Demo plan: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+**AI-driven adaptive anti-jamming for tactical drone and vehicle radio networks.**
+Team JamBreakers · BITS2WAVE (IEEE ComSoc, BMS College of Engineering) · problem statement SW-26 *AEGIS-LINK* · software track.
+
+A simulated battlefield radio network (drones, trucks, a command post) is attacked by nine kinds of jammer.
+ABHEDYA's neural network looks at the radio spectrum, identifies the type of jammer, and picks the right
+countermeasure in about 20 ms: hop, blacklist channels, raise power or switch to a more robust modulation.
+Every packet is really encrypted (AES-256-GCM). You watch it live in 3D, control it from a phone, and
+download a report at the end.
+
+> **Result (simulated, 10 seeds × 9 jammers, 810 runs):** the AI keeps **94.8 %** of messages flowing under
+> attack, against **54.0 %** for conventional fixed hopping. It also beats a rule-based defence that has the
+> *same* tools but no AI, by **+3.2 points** (paired 95 % CI +2.2 to +4.2), while using **less than half its
+> extra transmit power**. What this does and does not prove: **[docs/EVIDENCE.md](docs/EVIDENCE.md)**.
+
+| Read this | For |
+|---|---|
+| [docs/EVIDENCE.md](docs/EVIDENCE.md) | Claims, the evidence behind each one, and their limits |
+| [docs/BENCHMARK.md](docs/BENCHMARK.md) | Full benchmark tables (9 defences × 9 jammers) |
+| [docs/ROBUSTNESS.md](docs/ROBUSTNESS.md) | 1,136 runs under changed conditions, stacked and unseen jammers |
+| [docs/SECURITY.md](docs/SECURITY.md) | Radio encryption and keys; sign-in, roles and the QR join code |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the pieces fit together |
+| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | The demo, minute by minute, and answers to hard questions |
+| [docs/HARDWARE_TEST_PLAN.md](docs/HARDWARE_TEST_PLAN.md) | How we will test on real SDRs |
+
+## Quick start (demo laptop)
+
+1. Double-click **`run_windows.bat`**. The first run installs everything (needs internet once).
+   **On the first start the server window prints two sign-in accounts** (`commander`, `judge`); they are also
+   saved in `data/FIRST_LOGIN.txt`. Note them down.
+2. Double-click **`check_demo.bat`**. It checks power, Wi-Fi, firewall, ports and how fast this laptop runs 10×.
+   (Or run **`verify.bat`** once: installs, lints, runs every test and the check, then starts the server.)
+3. Open **http://localhost:8000/intro/**, the mission deck. Click any mission to start it in 3D.
+4. Phones: press **📱 Phone** in the 3D view, scan the QR, then sign in (`judge` can watch, `commander` can control).
+
+## Check everything with one command
+
+| Command | What it does |
+|---|---|
+| **`verify.bat`** (Windows) · `scripts/verify.sh` (macOS / Linux) | Installs everything, runs the lint, all 240+ tests and the pre-flight check; **only if all of it passes** it starts the server |
+| `check_demo.bat` | Pre-flight check only (power, Wi-Fi, firewall, port, accounts, real 10× speed). Read-only |
+| `python scripts/rehearse.py --rounds 3` | Automated rehearsal: drives the deck, 3D view, judges' screen, console and phone (QR + sign-in, roles), runs all 7 missions at 10× and downloads every report, failing on any browser error. Needs `pip install playwright` once |
+
+The same lint and tests run on GitHub for every push (Python 3.11 and 3.12), plus both front-end builds.
+
+## Features
+
+- **Simulated radio world**: 8 channels at 2.4 GHz, 10 ms slots, path loss, fading, terrain and buildings; drones on
+  patrol paths and trucks on roads; a command post and a relay.
+- **Nine jammers**: barrage, random, sweep, reactive, deceptive (forged frames), accidental, follower, a learning
+  "smart" jammer, and an unseen "novel" pattern. Several can run at once.
+- **The AI**: a CNN reads the spectrum and names the jammer (1.9 ms per window), then picks the response for that
+  type: keyed fast hopping, blacklisting, power, BPSK, relay or survival mode. It says "unknown" instead of guessing,
+  hands over to an RL agent when stuck, and a safety guard undoes any move that makes things worse.
+- **Real security**: AES-256-GCM on every packet, keyed hop sequences, signed orders, per-device keys, revocation,
+  replay protection; sign-in with roles for every screen that is not the demo laptop.
+- **Screens**: mission deck (3D voxel worlds), live 3D view with AI OFF / AI ON side by side, judges' screen, phone
+  app (PWA, joined by QR), debug console. Speeds 1×, 2×, 4×, 10×.
+- **Evidence**: seeded benchmark (9 defences × 9 jammers × 10 seeds), robustness sweep (1,136 runs), classifier
+  stress test, paired statistics, a downloadable HTML report for every mission, a CSV mission log.
+
+## Limitations (read these before judging)
+
+- **Everything is simulated.** No over-the-air measurement yet; the GNU Radio chain is a software cross-check. The
+  hardware test plan and kit are ready (`docs/HARDWARE_TEST_PLAN.md`, `hil/`), the SDR backend is not written.
+- **The jammers and the training data come from our own simulator.** The stress test (`docs/EVIDENCE.md` §3)
+  checks distortions the CNN never saw, but a real adversary may behave in ways none of our models capture.
+- **Most of the gain over fixed hopping comes from the tools** (power, modulation, blacklisting). The AI adds
+  +3.2 points over the same tools driven by rules, and uses far less power. It ties the RL agent on delivery.
+- **Rare jammer types are named poorly** (about 60 % for deceptive, accidental, follower); delivery stays high
+  because their responses overlap.
+- **One laptop, one Python process.** At 10× a slow or battery-powered laptop runs slower than 10×
+  (`check_demo.bat` measures it). The phone app over plain http sends the password unencrypted unless a
+  certificate is added (`docs/SECURITY.md`).
 
 ## Run
 
@@ -21,11 +87,11 @@ no internet at demo time, no GPU.
 2. Open **http://localhost:8000/demo** (judges' screen) or **http://localhost:8000/viewer/** (3D view).
 3. Phones: join the laptop's Wi-Fi or its Mobile hotspot, press **📱 Phone** and scan the QR code.
 
-Running it again is always safe: it stops any older AEGIS-LINK server on ports 8000/8001 first.
+Running it again is always safe: it stops any older ABHEDYA server on ports 8000/8001 first.
 
 **macOS / Linux:** `./run.sh` (same first-run behaviour; `AEGIS_PORT=8100 ./run.sh` for another port).
 
-**Docker:** `docker build -t aegis-link . && docker run --rm -p 8000:8000 aegis-link`
+**Docker:** `docker build -t abhedya . && docker run --rm -p 8000:8000 abhedya`
 (NumPy signal chain, runtime packages only. The image contents were verified by running exactly the files it
 copies with only `requirements.txt`; build it once with internet before the event.)
 
@@ -46,7 +112,7 @@ radioconda in the usual places; NumPy stays the default because it is ~6x faster
 | 3D view blank or very slow | Add `?q=low` to the URL (lighter graphics). |
 | Old page after an update | Ctrl+F5 (the server already sends no-cache headers). |
 
-**Tests:** `.venv\Scripts\python -m pytest -q` (Windows, or double-click `run_tests.bat`) or `.venv/bin/python -m pytest -q`: 155 tests; PyTorch
+**Tests:** `.venv\Scripts\python -m pytest -q` (Windows, or double-click `run_tests.bat`) or `.venv/bin/python -m pytest -q`: 200+ tests, plus `ruff check .` for lint (both run on every push, see the CI badge); PyTorch
 (training only) and GNU Radio tests skip themselves when not installed.
 
 Then open:
@@ -65,8 +131,6 @@ Then open:
 **Phones:** use the same Wi-Fi or hotspot. The server binds to `0.0.0.0`. On Windows, allow Python
 through the firewall for **private** networks.
 
-**Tests:** `.venv\Scripts\python -m pytest -q` (Windows) or `.venv/bin/python -m pytest -q`.
-
 **Probe a running server:** `python scripts/ws_probe.py --cmd '{"action":"launch_jammer","jammer_type":"barrage","pos":[100,100]}'`
 
 ### Environment variables (all optional)
@@ -78,6 +142,11 @@ through the firewall for **private** networks.
 | `AEGIS_SEED` | `42` | Seed for replayable runs |
 | `AEGIS_TICK_HZ` | `20` | Broadcast rate |
 | `AEGIS_SLOT_MS` | `10` | Radio slot length inside the simulation |
+| `AEGIS_AUTH` | `1` | `0` switches sign-in off (anyone on the Wi-Fi can then control the demo) |
+| `AEGIS_JOIN_CODE` | `0` | `1` also asks phones for the join code shown under the laptop's QR |
+| `AEGIS_USERS_FILE` | `data/users.json` | Where accounts are stored |
+
+The variables keep their `AEGIS_` prefix from the project's working name, so existing setups keep working.
 
 ## Message contract (summary)
 
@@ -91,7 +160,7 @@ The full contract is `shared/schema.json` (JSON Schema 2020-12). Every server me
   {jammer_type, pos:[x,y], power_dbm?}, `clear_jammers`, `toggle_ai` {enabled?}, `set_view`
   {view: single|side_by_side}, `run_benchmark` {seed?, duration_s?}, `security_test`
   {test: tamper|spoof|replay|eavesdrop}, `load_scenario` {name}, `exit_scenario`, `play`, `pause`,
-  `set_speed` {1|2|4}, `restart`.
+  `set_speed` {1|2|4|10}, `restart`.
 - **Side-by-side:** the server sends two `state` and two `spectrum` messages per tick, with `world` set
   to `ai_off` and `ai_on`. In single view, `world` is `main`.
 - **Errors:** an `error` goes only to the client that sent the bad command, with `req_id` echoed back.
@@ -161,7 +230,7 @@ a 12 × 32 heat map showing where the CNN looked.
 
 | Held-out live windows (other seeds) | 1,680 |
 |---|---|
-| Accuracy | **95.4 %** (clean 100, barrage 100, sweep 100, reactive 97.9, deceptive 95.8, random 88.3, accidental 85.8) |
+| Accuracy (held-out test set, 1,680 windows captured live) | **95.4 %** (clean 100, barrage 100, sweep 100, reactive 97.9, deceptive 95.8, random 88.3, accidental 85.8) |
 | NumPy inference | 1.9 ms per window (target < 20 ms) |
 
 Rebuild with `python -m ai.dataset` and then `python -m ai.train` (about 2 + 4 min on a laptop CPU).
@@ -186,20 +255,7 @@ On top of the per-class responses:
 - **Hop guard and recovery:** at most 4 hops in 5 s; when the band is quiet, emergency measures are stepped back down one at a time.
 - **Localisation:** wideband RSSI least squares with per-node path-loss exponents, a leave-one-out NLOS rejection pass (8 dB) and a 95 % uncertainty radius. Estimates are published under 300 m and announced under 150 m. Measured: published in 23 of 30 runs, median error 67 m on a 1.5 × 1.3 km map.
 
-**Results** (12 s runs, jammer from t = 2 s, 4 seeds × random jammer positions; mean delivery):
-
-| Jammer | Fixed hopping (AI OFF) | Energy detector | **AEGIS** | AEGIS worst run |
-|---|---|---|---|---|
-| barrage | 40.8 % | 40.8 % | **92.6 %** | 86.0 % |
-| random | 66.3 % | 93.9 % | **99.0 %** | 97.8 % |
-| sweep | 41.2 % | 41.2 % | **93.4 %** | 89.7 % |
-| reactive | 88.4 % | 21.7 % | **93.9 %** | 93.2 % |
-| deceptive | 92.7 % | 95.2 % | **99.8 %** | 99.8 % |
-| accidental | 97.8 % | 99.0 % | **99.6 %** | 99.3 % |
-| follower | 13.9 % | 13.1 % | **99.7 %** | 99.6 % |
-
-Hop latency (first jammed slot until the whole network is on the new channel, control frame
-included): median 20 ms, p95 50 ms, over 509 hops.
+**Results:** delivery, accuracy and latency figures for every defence are in [docs/EVIDENCE.md](docs/EVIDENCE.md) (section 0 defines each number) and [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 **Lessons this build taught us** (good answers for judges):
 
@@ -208,6 +264,8 @@ included): median 20 ms, p95 50 ms, over 509 hops.
 - **Don't re-classify every 10 ms.** Under heavy jamming that cost 27 ms per slot and stalled the server. The defender now waits 50 ms after acting and 250 ms after holding, and the server never does more than 2× the normal work per tick.
 
 ## Security (Phase 3)
+
+Full threat model, including the v1.0 sign-in for phones and second screens: [docs/SECURITY.md](docs/SECURITY.md).
 
 `sim/security.py` uses the audited `cryptography` library and implements no crypto of its own.
 
@@ -229,20 +287,17 @@ included): median 20 ms, p95 50 ms, over 509 hops.
 
 Each test shows the real header and ciphertext bytes.
 
-## Benchmark (Phase 4)
+## Benchmark (Phase 4, extended in v1.0)
 
-`python -m sim.benchmark` (or **▶ Benchmark** in the 3D view) runs every jammer type against no
-defence, fixed hopping, the energy detector and AEGIS-LINK. For each seed, all four face an identical
-seeded run, so only the defence differs. Runs go to worker processes, so the live demo never stutters.
-Results land in `results/` (JSON + CSV, plus `benchmark_latest.*`) and appear in the 3D view, where
-**📊 Results** reopens the latest without re-running. Slide numbers: [docs/BENCHMARK.md](docs/BENCHMARK.md).
+`python -m sim.benchmark` runs every jammer type against nine defences: no defence, fixed hopping, an energy
+detector, secret fast hopping, brute force (max power + BPSK), rule-based adaptive control with no AI, the RL
+agent, the ABHEDYA AI and the hybrid. For each seed, every defence faces an identical seeded run, so only the
+defence differs. **▶ Benchmark** in the 3D view runs the fair line-up of four (fixed hopping, brute force, rules
+without AI, ABHEDYA) in worker processes, so the live demo never stutters. Results land in `results/` and
+**📊 Results** reopens the latest.
 
-| 5 seeds × 7 jammers | Fixed hopping (AI OFF) | AEGIS-LINK |
-|---|---|---|
-| Mean packets delivered | 61.0 % | **96.9 %** |
-| Worst jammer type | 14.2 % | **89.2 %** |
-| Outage per attack | 4.3 s | **0.3 s** |
-| Hop latency median / p95 | — | **20 / 30 ms** |
+Current numbers, paired statistics and limits: [docs/EVIDENCE.md](docs/EVIDENCE.md). Full tables:
+[docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 ## Smart jammer, RL agent and the full benchmark (Phase 6)
 
@@ -250,14 +305,12 @@ Results land in `results/` (JSON + CSV, plus `benchmark_latest.*`) and appear in
   Every second a UCB1 bandit picks one of five tactics: follow, predict (it learns our hop transitions), wide,
   pulse or spoof. It scores each by how often its energy landed on our channel, using only channels it has
   heard us on. Its label in the 3D view and on the phone shows the tactic it is using right now. It learns to
-  *predict* fixed hopping and to *follow* the energy detector; against AEGIS-LINK nothing works.
+  *predict* fixed hopping and to *follow* the energy detector; against ABHEDYA nothing works.
 - **RL hopping agent** (`ai/rl.py`, defender `rl`): tabular Q-learning (256 states × 5 moves) trained in this
   simulator from packet loss and channel energy only. Retrain with `python -m ai.rl --train` (~2 min).
-- **Full benchmark**: 9 attacks × 6 defences × 10 seeds × 20 s, identical seeded runs, with SD, 95 % CI and worst run.
-  The hybrid has the best average (**95.1 %**), then AEGIS alone (94.8 %), the RL agent (94.3 %, best against the
-  smart jammer); the three AI defences overlap within their confidence intervals. Fixed hopping 54.3 %, energy
-  detector 49.2 %, no defence 39.2 %. Table and chart: [`docs/BENCHMARK.md`](docs/BENCHMARK.md);
-  re-run with `python -m sim.benchmark --seeds 10 --duration 20` and redraw with `python scripts/plot_benchmark.py`.
+- **Full benchmark**: 9 attacks × 9 defences × 10 seeds × 20 s, identical seeded runs, with SD, 95 % CI, worst run
+  and paired comparisons. Numbers and their limits: [`docs/EVIDENCE.md`](docs/EVIDENCE.md); re-run with
+  `python -m sim.benchmark --seeds 10 --duration 20` and redraw with `python scripts/plot_benchmark.py`.
 - **Leaderboard**: everyone who launches jammers from a phone (with a name set) appears on the big screen.
 
 ## What-if handling (Phase 8)
@@ -308,7 +361,7 @@ Ten points from the review, what we built for each, and what it measured. All nu
 | A | No hardware in the loop | `hil/`: one radio interface (SimBackend today, SdrBackend wiring guide), bench test, measured-vs-predicted comparison, `docs/HARDWARE_TEST_PLAN.md` (two SDRs, cabled through attenuators, nothing radiated) | Scripts run end to end on the simulator backend. **Nothing hardware-validated yet**; GNU Radio is a software cross-check only |
 | B | RF calibration | `ai/calibration.py`: start-up quiet-band calibration (gain + ripple), AGC gain taken from the radio, DC-spike removal, slow rate-limited floor tracking from quiet bins only, occupancy over the real 2.7 MHz channel (4 bins) | CNN on a receiver with ±15 dB gain error, ripple, DC spike and AGC steps: 78–91 % → 100 % correct, same as a clean receiver |
 | C | Time sync | `sim/timesync.py`: ±20 ppm clocks, 1 s beacons with drift estimation, holdover, backup master after 3 s, reboot → rendezvous resync | No sync: outside the 0.5 ms guard after 25 s. Synced ≤ 19 µs; 120 s holdover 70 µs; master loss → D1 takes over ≤ 12 µs; reboot (47 ms off) resynced in 50 ms |
-| D | Benchmark statistics | 10-seed benchmark with SD, 95 % CI and worst run; `sim/robustness.py` sweeps power, distance, speed, network size, background, stacked and unseen jammers (1,136 runs) | AI ON 95.1 % (CI 94.3–95.9) vs 54.3 %; AI ON wins all 71 conditions; weakest: 46 dBm sweep 51 %, stacked 61–89 %. Hop latency p50 20 ms, p95 110 ms (misses 100 ms at p95). `docs/ROBUSTNESS.md` |
+| D | Benchmark statistics | 10-seed benchmark with SD, 95 % CI and worst run; `sim/robustness.py` sweeps power, distance, speed, network size, background, stacked and unseen jammers (1,136 runs) | AI ON (hybrid) 95.1 % (CI 94.3–96.0) vs 54.0 % for fixed hopping; AI ON wins all 71 conditions; weakest: 46 dBm sweep 51 %, stacked 61–89 %. Hop latency p50 20 ms, p95 110 ms (misses 100 ms at p95). `docs/EVIDENCE.md`, `docs/ROBUSTNESS.md` |
 | E | Several / unseen jammers | `ai/behaviours.py`: multi-label tracker (wideband / tracking / narrowband / intermittent / unknown); the follower under a sweep is found with a t-test; a second unseen pattern (`novel_staircase`) | AEGIS: sweep + follower 74.9 ± 6.6 → 78.2 ± 1.8 %; three stacked 70.6 ± 9.0 → 75.0 ± 3.4 % (8 seeds). Staircase 77.8 %, flagged unknown |
 | F | Hybrid referee | Context-aware referee: stacked / volatile / steady, a separate scoreboard per context, faster judging when the attack keeps changing | smart 92.9 (AEGIS 89.0, RL 94.5); novel 93.2 (best of three) |
 | G | QoS routing | `sim/qos.py`: command / position / battery / telemetry classes with deadlines, strict priority, store-and-forward, FIFO baseline on identical links | Under sweep + follower: commands on time 87.9 vs 65.8 %; position 97.6 vs 70.6 %; 100 % of commands delivered |
@@ -335,17 +388,17 @@ power, modulation, routing and QoS.
 
 Press **🎬 Scenarios** (or `S`) in the 3D view. Each scenario is one jammer type in its own environment, with its own
 obstacles (that really block signals in the simulation), unit routes, camera and time of day. It always runs side by side:
-left = AI OFF (fixed hopping), right = AI ON (AEGIS-LINK), same seed and same attack.
+left = AI OFF (fixed hopping), right = AI ON (ABHEDYA), same seed and same attack.
 
 | # | Scenario | Jammer | Environment | Expected |
 |---|---|---|---|---|
-| 1 | Border convoy | barrage | mountain pass · night | Fixed hopping ≈ 30–40 % delivered · AEGIS-LINK ≈ 90 %+ |
-| 2 | Urban patrol | random | city · dusk | Fixed hopping ≈ 65–70 % · AEGIS-LINK ≈ 97 %+ |
-| 3 | Coastal watch | sweep | coast · dusk | Fixed hopping ≈ 25–40 % · AEGIS-LINK ≈ 85–95 % |
-| 4 | Forest ambush | reactive | forest · night | Fixed hopping ≈ 85–88 % · AEGIS-LINK ≈ 93–95 % |
-| 5 | Airbase spoofing | deceptive | airbase · night | Fixed hopping ≈ 90 % (but forged frames keep arriving) · AEGIS-LINK ≈ 99.8 % · forged frames accepted: 0 |
+| 1 | Border convoy | barrage | mountain pass · night | Fixed hopping ≈ 30–40 % delivered · ABHEDYA ≈ 90 %+ |
+| 2 | Urban patrol | random | city · dusk | Fixed hopping ≈ 65–70 % · ABHEDYA ≈ 97 %+ |
+| 3 | Coastal watch | sweep | coast · dusk | Fixed hopping ≈ 25–40 % · ABHEDYA ≈ 85–95 % |
+| 4 | Forest ambush | reactive | forest · night | Fixed hopping ≈ 85–88 % · ABHEDYA ≈ 93–95 % |
+| 5 | Airbase spoofing | deceptive | airbase · night | Fixed hopping ≈ 90 % (but forged frames keep arriving) · ABHEDYA ≈ 99.8 % · forged frames accepted: 0 |
 | 6 | Relief camp | accidental | camp · day | Both stay high (≈ 98–100 %). The point: the AI does not over-react. |
-| 7 | Drone delivery | follower | desert · sunset | Fixed hopping ≈ 10–15 % · AEGIS-LINK ≈ 99 % |
+| 7 | Drone delivery | follower | desert · sunset | Fixed hopping ≈ 10–15 % · ABHEDYA ≈ 99 % |
 
 While a scenario runs: a briefing card (story, what to watch, how the AI responds), a caption bar that narrates each step
 with a timeline, and **Pause / 1×-2×-4× / Replay / Exit** (Space pauses). At the end a report compares AI OFF and AI ON
@@ -370,16 +423,19 @@ Drag to orbit, scroll to zoom, right-drag to pan. Units are drawn about 14× rea
 ## Layout
 
 ```
-backend/   FastAPI server, command models, World interface, fake world, debug console
+backend/   FastAPI server, sign-in (auth.py, users.py), command models, World interface, fake world, debug console
 shared/    schema.json, the single message contract
 sim/       radio world: GNU Radio chain + NumPy fallback, jammers, baselines   (Phase 1)
-ai/        data generator, CNN training/inference, defender, localisation    (Phase 2)
+ai/        data generator, CNN training/inference, defender, localisation, classifier stress test (Phase 2, v1.0)
 viewer3d/  Three.js 3D view, vendored, offline                               (Phase 5)
+intro/     mission deck: 3D voxel worlds, one slide per mission (React + three.js) (Phase 11)
 mobile/    React PWA built with Vite, served at /app/                         (Phase 5)
 hil/       radio interface, bench test, measured-vs-predicted (not yet run on hardware) (Phase 10)
 recordings/ spectrum recordings for replay (the shipped ones are simulator captures)  (Phase 9)
-tests/     pytest
-scripts/   helpers (ws_probe.py)
+tests/     pytest (200+ tests; run on every push by .github/workflows/ci.yml)
+scripts/   preflight.py (check_demo.bat), plot_benchmark.py, truck_speed_check.py, ws_probe.py
+docs/      evidence, benchmark, robustness, security, architecture, demo script, hardware test plan
+data/      created on first start: accounts (git-ignored, never committed)
 ```
 
 To plug in the real simulation, implement `backend/world_api.World` (`hello_info`, `step`, `handle`)
@@ -401,3 +457,5 @@ the same.
 | 8 | What-if handling: battery, unknown jammer, sync loss, survival mode, hybrid AI, safety guard | all | ✅ |
 | 9 | Truck trips and base camps, real-spectrum replay, mission log | all | ✅ |
 | 10 | Review fixes A–J: keys, time sync, multi-jammer, referee, QoS, calibration, localisation check, statistics, hardware test kit | all | ✅ (hardware run pending) |
+| 11 | ABHEDYA: mission deck, rebrand, downloadable report, 10× speed | all | ✅ |
+| 12 | v1.0: sign-in and roles, stronger baselines + paired statistics, classifier stress test, evidence doc, CI, demo pre-flight check | all | ✅ |

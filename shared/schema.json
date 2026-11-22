@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aegis-link.local/schema/1.0",
-  "title": "AEGIS-LINK WebSocket message contract",
+  "title": "ABHEDYA WebSocket message contract",
   "description": "Every message on /ws in either direction. Server->client messages use the envelope {v, type, t, src}. Client->server messages are commands {type:'cmd', action, ...}. Version 1.0. Change 'v' when a breaking change is made.",
   "oneOf": [
     {
@@ -803,7 +803,10 @@
             "energy",
             "aegis",
             "rl",
-            "hybrid"
+            "hybrid",
+            "fhss_keyed",
+            "max_power",
+            "afh_power"
           ],
           "description": "Who is defending this world"
         },
@@ -1100,7 +1103,10 @@
             "energy",
             "aegis",
             "rl",
-            "hybrid"
+            "hybrid",
+            "fhss_keyed",
+            "max_power",
+            "afh_power"
           ]
         }
       }
@@ -1222,7 +1228,10 @@
             "energy",
             "aegis",
             "rl",
-            "hybrid"
+            "hybrid",
+            "fhss_keyed",
+            "max_power",
+            "afh_power"
           ]
         },
         "delivery_pct": {

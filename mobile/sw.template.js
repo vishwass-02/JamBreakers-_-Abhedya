@@ -1,4 +1,4 @@
-// AEGIS-LINK phone app service worker: app shell cache-first; live data (/ws, /api) always from the laptop.
+// ABHEDYA phone app service worker: app shell cache-first; live data (/ws, /api) always from the laptop.
 const CACHE = 'aegis-app-__VERSION__';
 const FILES = __FILES__;
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });

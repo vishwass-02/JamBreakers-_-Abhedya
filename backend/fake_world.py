@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import commands as C
+from .protocol import SERVER_VERSION
 from .protocol import (
     ARENA_BOUNDS, BINS_PER_CHANNEL, CHANNELS_MHZ, CNN_CLASSES, F_START_MHZ, F_STOP_MHZ, FFT_BINS,
     JAMMER_TYPES, N_CHANNELS, envelope,
@@ -345,7 +346,7 @@ class FakeArena:
 
     # ---- World protocol ----
     def hello_info(self) -> dict[str, Any]:
-        return {"server_version": "0.1.0", "schema_version": "1.0", "world_source": "fake", "signal_backend": "none",
+        return {"server_version": SERVER_VERSION, "schema_version": "1.0", "world_source": "fake", "signal_backend": "none",
                 "channels_mhz": CHANNELS_MHZ, "fft_bins": FFT_BINS, "bounds": ARENA_BOUNDS,
                 "jammer_types": JAMMER_TYPES, "classes": CNN_CLASSES, "ai_enabled": self.ai_enabled,
                 "view": self.view, "key_fingerprint": "FAKE-00:00:00:00"}

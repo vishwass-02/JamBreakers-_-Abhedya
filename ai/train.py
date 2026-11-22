@@ -54,7 +54,10 @@ def export(model: Net, path: Path, meta: dict) -> None:
              classes=np.array(CLASSES), meta=np.array(json.dumps(meta)))
 
 
-def confusion(y_true, y_pred, n=len(CLASSES)):
+N_CLASSES = len(CLASSES)
+
+
+def confusion(y_true, y_pred, n=N_CLASSES):
     m = np.zeros((n, n), dtype=int)
     for t, p in zip(y_true, y_pred):
         m[t, p] += 1

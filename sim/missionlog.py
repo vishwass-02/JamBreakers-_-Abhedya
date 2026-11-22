@@ -85,7 +85,7 @@ class MissionLog:
     def to_csv(self) -> str:
         buf = io.StringIO()
         s = self.summary()
-        buf.write(f"# AEGIS-LINK mission log: {s['label']}, started {s['started']}\n")
+        buf.write(f"# ABHEDYA mission log: {s['label']}, started {s['started']}\n")
         buf.write(f"# {s['decisions']} AI decisions, {s['guard_corrections']} corrected or undone by the safety guard, "
                   f"mean delivery {s['mean_delivery_pct']} %\n")
         w = csv.DictWriter(buf, fieldnames=COLUMNS, extrasaction="ignore", lineterminator="\n")

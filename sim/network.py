@@ -10,7 +10,7 @@ import numpy as np
 
 from .radio import (
     BUILDING_LOSS_DB, HILL_LOSS_DB, N_CH, NOISE_INBAND_DBM, PL_EXPONENT_AIR, PL_EXPONENT_GROUND, RICIAN_K_DB_AIR,
-    RICIAN_K_DB_GROUND, TX_POWER_DBM, dbm_to_mw, mw_to_dbm, obstacle_loss_db, obstacle_loss_many, packet_delivery, path_loss_db,
+    RICIAN_K_DB_GROUND, TX_POWER_DBM, dbm_to_mw, mw_to_dbm, obstacle_loss_many, packet_delivery, path_loss_db,
     rician_gain_db,
 )
 

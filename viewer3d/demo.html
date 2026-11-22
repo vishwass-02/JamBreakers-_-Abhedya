@@ -50,6 +50,7 @@
   </aside>
 </div>
 <div id="big"><div class="box"><h2>Scan to control the simulation</h2><div id="qr-big"></div><p>Join the same Wi-Fi or hotspot · <code id="url2"></code></p></div></div>
+<script src="/auth.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
@@ -58,7 +59,7 @@
     const here = location.hostname, lan = (r.app_urls || []).filter((u) => !u.includes('//127.'));
     const url = here !== 'localhost' && !here.startsWith('127.') ? `${location.protocol}//${location.host}/app/` : lan[0] || `http://localhost:${r.port}/app/`;
     $('qr-small').innerHTML = svg(url, 3); $('qr-big').innerHTML = svg(url, 8);
-    $('url').textContent = $('url2').textContent = url.replace('http://', '');
+    $('url').textContent = $('url2').textContent = url.replace('http://', '').split('#')[0] + (r.join_code ? '  ·  join code ' + r.join_code : '');
     if (!lan.length) $('url').textContent += '  (no Wi-Fi/hotspot found)';
   });
   $('join').onclick = $('b-qr').onclick = () => $('big').classList.add('show');

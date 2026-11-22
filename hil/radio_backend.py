@@ -24,7 +24,7 @@ from typing import Optional
 
 import numpy as np
 
-from sim.radio import NOISE_INBAND_DBM, PACKET_BITS, packet_delivery
+from sim.radio import NOISE_INBAND_DBM, packet_delivery
 
 CHANNEL_MHZ = [2410 + 10 * c for c in range(8)]
 

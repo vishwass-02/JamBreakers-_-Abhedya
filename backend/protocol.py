@@ -6,8 +6,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from sim import __version__ as SERVER_VERSION  # noqa: F401  (re-exported; the single version number lives in sim/__init__.py)
+
 SCHEMA_VERSION = "1.0"
-SERVER_VERSION = "0.1.0"
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "shared" / "schema.json"
 
 N_CHANNELS = 8

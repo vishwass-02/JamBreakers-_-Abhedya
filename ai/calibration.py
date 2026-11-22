@@ -19,12 +19,15 @@ What a real receiver gets wrong, and what this module does about it
                      removed, so a slope is not mistaken for a wideband jammer.
   DC spike           direct-conversion receivers show a spike at the centre frequency; those bins are
                      replaced by their neighbours.
+  dropped frames     an SDR that cannot keep up drops FFT frames and says so (UHD / SoapySDR overflow flags). A lost
+                     frame must not look like a jammer switching off: pass its row numbers as missing_rows and
+                     it is filled from the nearest frame that did arrive. Without this, a lost frame reads as the
+                     on/off pattern of a random jammer (stress test: 'random' accuracy 2.5 % -> see docs/EVIDENCE.md).
   rising background  other devices lift the floor slowly; the floor follows it only through bins that are
                      quiet, at most 0.5 dB a second, so a jammer that switches on is never absorbed into it.
 """
 from __future__ import annotations
 
-from collections import deque
 
 import numpy as np
 
@@ -67,8 +70,21 @@ class Calibrator:
         self.drift, self.calibrated = 0.0, True
         return {"gain_db": round(self.gain, 1), "ripple_pp_db": round(float(np.ptp(self.shape)), 1)}
 
-    def calibrate(self, raw_window: np.ndarray, rx_gain_db: float = 0.0, dt: float = 0.02) -> np.ndarray:
+    @staticmethod
+    def fill_missing(w: np.ndarray, missing_rows) -> np.ndarray:
+        """Rows the receiver reported as dropped take the value of the nearest row that arrived."""
+        bad = sorted(set(int(r) for r in missing_rows if 0 <= int(r) < w.shape[0]))
+        good = [r for r in range(w.shape[0]) if r not in bad]
+        if not bad or not good:
+            return w
+        w = w.copy()
+        for r in bad:
+            w[r] = w[min(good, key=lambda g: (abs(g - r), g))]
+        return w
+
+    def calibrate(self, raw_window: np.ndarray, rx_gain_db: float = 0.0, dt: float = 0.02, missing_rows=()) -> np.ndarray:
         w = self._dc(np.asarray(raw_window, dtype=np.float64)) - rx_gain_db - self.shape - self.gain
+        w = self.fill_missing(w, missing_rows)
         # slow background tracking through quiet bins only (rate limited)
         quiet = w[w < NOISE_BIN_DBM + self.drift + 3.0]
         if quiet.size > w.size * 0.2:

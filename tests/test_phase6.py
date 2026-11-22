@@ -76,10 +76,15 @@ def test_published_benchmark_has_aegis_on_top():
     jams = {r["jammer"] for r in d["rows"]}
     defs = {r["defender"] for r in d["rows"]}
     assert {"smart", "follower", "barrage", "novel"} <= jams
-    assert defs == {"none", "fixed_hopping", "energy", "rl", "aegis", "hybrid"}
+    assert defs == {"none", "fixed_hopping", "energy", "fhss_keyed", "max_power", "afh_power", "rl", "aegis", "hybrid"}
     mean = {o["defender"]: o["delivery_pct"] for o in d["overall"]}
     assert max(mean, key=mean.get) in ("aegis", "hybrid")   # done-when of build-plan step 10: the CNN defender on top
     assert mean["hybrid"] >= mean["aegis"] >= mean["rl"] > mean["fixed_hopping"]
+    # the claims in docs/EVIDENCE.md: the AI beats the same toolbox driven by rules, significantly, and with less power
+    paired = {p["vs"]: p for p in d["paired"]}
+    assert paired["afh_power"]["ci95_points"][0] > 0 and paired["fixed_hopping"]["ai_losses"] == 0
+    boost = {o["defender"]: o["mean_boost_db"] for o in d["overall"]}
+    assert boost["aegis"] < boost["afh_power"] / 2 and boost["aegis"] < boost["max_power"]
     assert (ROOT / "docs" / "benchmark_chart.png").exists()
 
 

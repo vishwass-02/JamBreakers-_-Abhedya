@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 
 import pytest
+from pydantic import ValidationError
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
@@ -20,7 +21,7 @@ def cmd(**k):
 def test_speed_10_is_accepted_and_others_are_not():
     assert cmd(action="set_speed", speed=10).speed == 10
     for bad in (3, 5, 20):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             cmd(action="set_speed", speed=bad)
 
 
@@ -87,3 +88,23 @@ def test_border_convoy_barrage_hurts_fixed_hopping_but_not_the_ai():
     m = a.last_report["msg"]
     assert 25 <= m["ai_off"]["delivery_attack_pct"] <= 45
     assert m["ai_on"]["delivery_attack_pct"] >= 90
+
+
+def test_a_screen_that_reconnects_after_the_mission_still_gets_the_result(finished):
+    """Seen in the automated rehearsal: a slow screen lost its connection in the last seconds and never saw the
+    report. Screens that connect while a result is on screen get it right after hello; it clears on the next run."""
+    app = create_app(Settings())
+    with TestClient(app) as c:
+        hub = app.state.hub
+        if not hasattr(hub.world, "finished_report"):
+            pytest.skip("fake world")
+        hub.world.finished_report = finished.last_report["msg"]
+        with c.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["type"] == "hello"
+            m = ws.receive_json()
+            assert m["type"] == "report" and m["scenario"] == "coastal_watch"
+            ws.send_json({"type": "cmd", "action": "exit_scenario"})
+            for _ in range(200):
+                if ws.receive_json().get("type") == "event":
+                    break
+        assert hub.world.finished_report is None

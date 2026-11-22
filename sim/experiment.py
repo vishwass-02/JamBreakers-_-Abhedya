@@ -28,6 +28,8 @@ class RunResult:
     hops: int
     decisions: list
     world: SimWorld
+    mean_boost_db: float = 0.0      # average extra transmit power while jammed (battery cost)
+    slow_rate_pct: float = 0.0      # share of jammed time spent at the slower, more robust modulation
 
 
 def run_episode(jammer: Optional[str], defender: str, seed: int = 7, duration_s: float = 15.0, jam_at_s: float = 2.0,
@@ -40,7 +42,11 @@ def run_episode(jammer: Optional[str], defender: str, seed: int = 7, duration_s:
     if jammer:
         w.launch(make_jammer("J1", jammer, pos or DEFAULT_JAMMER_POS[jammer], power_dbm, None))
     decisions = []
+    boost = 0.0
+    bpsk = 0
     for _ in range(n_total - n_pre):
+        boost += w.net.tx_boost_db
+        bpsk += w.net.modulation != "QPSK"
         w.step_slot()
         decisions.extend(m for m in w.outbox if m["type"] == "decision")
         w.outbox.clear()
@@ -48,4 +54,5 @@ def run_episode(jammer: Optional[str], defender: str, seed: int = 7, duration_s:
     lat = sorted(w.latencies)
     return RunResult(jammer or "none", w.defender_name, round(100 * deliv / max(sent, 1), 1), round(w.outage_ms - base_out, 1),
                      round(float(np.median(lat)), 1) if lat else None, round(float(np.percentile(lat, 95)), 1) if lat else None,
-                     w.hops, decisions, w)
+                     w.hops, decisions, w, round(boost / max(n_total - n_pre, 1), 2),
+                     round(100 * bpsk / max(n_total - n_pre, 1), 1))

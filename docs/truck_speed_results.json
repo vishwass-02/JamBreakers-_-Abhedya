@@ -1,0 +1,130 @@
+{
+  "defender": "aegis",
+  "seeds": 5,
+  "duration_s": 20.0,
+  "speeds": {
+    "benchmark (32 / 25 km/h)": {
+      "per_jammer": {
+        "barrage": {
+          "delivery_pct": 96.6,
+          "votes": 142,
+          "correct": 137,
+          "accuracy_pct": 96.5
+        },
+        "random": {
+          "delivery_pct": 98.3,
+          "votes": 51,
+          "correct": 44,
+          "accuracy_pct": 86.3
+        },
+        "sweep": {
+          "delivery_pct": 88.3,
+          "votes": 265,
+          "correct": 255,
+          "accuracy_pct": 96.2
+        },
+        "reactive": {
+          "delivery_pct": 94.5,
+          "votes": 427,
+          "correct": 418,
+          "accuracy_pct": 97.9
+        },
+        "deceptive": {
+          "delivery_pct": 99.9,
+          "votes": 7,
+          "correct": 4,
+          "accuracy_pct": 57.1
+        },
+        "accidental": {
+          "delivery_pct": 100.0,
+          "votes": 8,
+          "correct": 5,
+          "accuracy_pct": 62.5
+        },
+        "follower": {
+          "delivery_pct": 99.8,
+          "votes": 14,
+          "correct": 8,
+          "accuracy_pct": 57.1
+        },
+        "smart": {
+          "delivery_pct": 91.1,
+          "votes": 0,
+          "correct": 0,
+          "accuracy_pct": null
+        },
+        "novel": {
+          "delivery_pct": 86.9,
+          "votes": 0,
+          "correct": 0,
+          "accuracy_pct": null
+        }
+      },
+      "delivery_pct": 95.0,
+      "accuracy_pct": 79.1,
+      "accuracy_pooled_pct": 95.3
+    },
+    "demo arena (72 / 58 km/h)": {
+      "per_jammer": {
+        "barrage": {
+          "delivery_pct": 96.5,
+          "votes": 156,
+          "correct": 146,
+          "accuracy_pct": 93.6
+        },
+        "random": {
+          "delivery_pct": 97.3,
+          "votes": 82,
+          "correct": 72,
+          "accuracy_pct": 87.8
+        },
+        "sweep": {
+          "delivery_pct": 89.7,
+          "votes": 293,
+          "correct": 283,
+          "accuracy_pct": 96.6
+        },
+        "reactive": {
+          "delivery_pct": 94.5,
+          "votes": 440,
+          "correct": 426,
+          "accuracy_pct": 96.8
+        },
+        "deceptive": {
+          "delivery_pct": 99.9,
+          "votes": 15,
+          "correct": 4,
+          "accuracy_pct": 26.7
+        },
+        "accidental": {
+          "delivery_pct": 99.9,
+          "votes": 15,
+          "correct": 5,
+          "accuracy_pct": 33.3
+        },
+        "follower": {
+          "delivery_pct": 99.8,
+          "votes": 21,
+          "correct": 8,
+          "accuracy_pct": 38.1
+        },
+        "smart": {
+          "delivery_pct": 90.8,
+          "votes": 0,
+          "correct": 0,
+          "accuracy_pct": null
+        },
+        "novel": {
+          "delivery_pct": 87.2,
+          "votes": 0,
+          "correct": 0,
+          "accuracy_pct": null
+        }
+      },
+      "delivery_pct": 95.1,
+      "accuracy_pct": 67.6,
+      "accuracy_pooled_pct": 92.4
+    }
+  },
+  "created": "2026-11-21 20:54"
+}

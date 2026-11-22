@@ -1,5 +1,5 @@
 @echo off
-REM AEGIS-LINK with the GNU Radio signal chain. Needs radioconda (https://github.com/ryanvolz/radioconda).
+REM ABHEDYA with the GNU Radio signal chain. Needs radioconda (https://github.com/ryanvolz/radioconda).
 cd /d "%~dp0"
 set RC=
 for %%D in ("%USERPROFILE%\radioconda" "%LOCALAPPDATA%\radioconda" "C:\radioconda" "C:\ProgramData\radioconda" "D:\radioconda") do (
@@ -16,6 +16,6 @@ for %%P in (8000 8001) do (
   for /f "tokens=5" %%I in ('netstat -ano ^| findstr /r /c:":%%P  *[0-9.:]*  *LISTENING"') do taskkill /PID %%I /F >nul 2>&1
 )
 set SIGNAL_BACKEND=gnuradio
-echo AEGIS-LINK (GNU Radio chain) on http://localhost:8000/demo
+echo ABHEDYA (GNU Radio chain) on http://localhost:8000/demo
 "%RC%\python.exe" -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
 pause

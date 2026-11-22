@@ -9,3 +9,4 @@ results/
 # keep: mobile/dist/ is committed at the end so the demo needs no npm
 ai/data/
 intro/node_modules/
+data/

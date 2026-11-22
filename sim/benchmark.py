@@ -27,8 +27,11 @@ from typing import Callable, Optional
 import numpy as np
 
 JAMMERS = ["barrage", "random", "sweep", "reactive", "deceptive", "accidental", "follower", "smart", "novel"]
-DEFENDERS = ["none", "fixed_hopping", "energy", "rl", "aegis", "hybrid"]
-LABELS = {"none": "No defence", "fixed_hopping": "Fixed hopping (FHSS)", "energy": "Energy detector", "rl": "RL agent (Q-learning)", "aegis": "AEGIS-LINK", "hybrid": "Hybrid (AEGIS + RL)"}
+DEFENDERS = ["none", "fixed_hopping", "energy", "fhss_keyed", "max_power", "afh_power", "rl", "aegis", "hybrid"]
+LABELS = {"none": "No defence", "fixed_hopping": "Fixed hopping (FHSS)", "energy": "Energy detector",
+          "fhss_keyed": "Secret fast hopping", "max_power": "Brute force (max power + BPSK)",
+          "afh_power": "Rule-based adaptive (no CNN)", "rl": "RL agent (Q-learning)", "aegis": "ABHEDYA AI",
+          "hybrid": "Hybrid (ABHEDYA + RL)"}
 TRUE_CLASS = {"barrage": "barrage", "random": "random", "sweep": "sweep", "reactive": "reactive",
               "deceptive": "deceptive", "accidental": "accidental", "follower": "random",
               "smart": None, "novel": None}            # changes tactic every second: no single right label, so not scored
@@ -58,7 +61,8 @@ def run_one(job: tuple) -> dict:
     return {"jammer": jammer, "defender": defender, "seed": seed, "delivery_pct": r.delivery_pct,
             "outage_ms": r.outage_ms, "latencies": list(r.world.latencies), "hops": r.hops,
             "votes": len(votes), "correct": correct,
-            "forged": r.world.frames_forged, "forged_accepted": r.world.frames_forged_accepted}
+            "forged": r.world.frames_forged, "forged_accepted": r.world.frames_forged_accepted,
+            "boost_db": r.mean_boost_db, "slow_rate_pct": r.slow_rate_pct}
 
 
 def _t95(n: int) -> float:
@@ -100,6 +104,8 @@ def aggregate(raw: list[dict], jammers: list[str], defenders: list[str]) -> tupl
                 "hop_latency_p99_ms": round(float(np.percentile(lat, 99)), 1) if lat else None,
                 "accuracy_pct": round(100 * sum(r["correct"] for r in rs) / votes, 1) if votes else None,
                 "forged_accepted": int(sum(r["forged_accepted"] for r in rs)),
+                "mean_boost_db": round(float(np.mean([r.get("boost_db", 0.0) for r in rs])), 2),
+                "slow_rate_pct": round(float(np.mean([r.get("slow_rate_pct", 0.0) for r in rs])), 1),
             })
     for d in defenders:
         rs = [r for r in rows if r["defender"] == d]
@@ -117,6 +123,8 @@ def aggregate(raw: list[dict], jammers: list[str], defenders: list[str]) -> tupl
             "worst_jammer_pct": round(float(min(r["delivery_pct"] for r in rs)), 1),
             "worst_run_pct": round(float(min(r["delivery_pct"] for r in raw if r["defender"] == d)), 1),
             "outage_ms": round(float(np.mean([r["outage_ms"] for r in rs])), 0),
+            "mean_boost_db": round(float(np.mean([r["mean_boost_db"] for r in rs])), 2),
+            "slow_rate_pct": round(float(np.mean([r["slow_rate_pct"] for r in rs])), 1),
             "hop_latency_median_ms": round(float(np.median(lat)), 1) if lat else None,
             "hop_latency_p95_ms": round(float(np.percentile(lat, 95)), 1) if lat else None,
             "hop_latency_p99_ms": round(float(np.percentile(lat, 99)), 1) if lat else None,
@@ -125,6 +133,24 @@ def aggregate(raw: list[dict], jammers: list[str], defenders: list[str]) -> tupl
                                  and _get(rows, j, d)["delivery_pct"] > _get(rows, j, "fixed_hopping")["delivery_pct"]),
         })
     return rows, overall
+
+
+def paired_vs(runs: list[dict], ai: str = "aegis") -> list[dict]:
+    """Paired comparison: the same seed and jammer (identical attack) run with the AI and with each other defence.
+    Mean difference in delivery, its 95 % CI, and how many of the paired runs the AI won, tied or lost."""
+    by = {(r["jammer"], r["seed"], r["defender"]): r for r in runs}
+    out = []
+    for d in sorted({r["defender"] for r in runs} - {ai}):
+        diffs = [by[(j, s, ai)]["delivery_pct"] - by[(j, s, d)]["delivery_pct"]
+                 for (j, s, dd) in by if dd == d and (j, s, ai) in by]
+        if len(diffs) < 2:
+            continue
+        sd, ci = _ci(diffs)
+        out.append({"vs": d, "label": LABELS.get(d, d), "pairs": len(diffs), "mean_gain_points": round(float(np.mean(diffs)), 2),
+                    "ci95_points": [round(ci[0], 2), round(ci[1], 2)] if ci else None, "sd": sd,
+                    "ai_wins": sum(x > 0.05 for x in diffs), "ties": sum(abs(x) <= 0.05 for x in diffs),
+                    "ai_losses": sum(x < -0.05 for x in diffs)})
+    return out
 
 
 def _get(rows, j, d):
@@ -172,8 +198,12 @@ def run_benchmark(seed: int = 7, seeds: int = 3, duration_s: float = 12.0, jam_a
                     job = futs[fut]
                     progress((i + 1) / len(jobs), f"{job[0]} vs {LABELS[job[1]]}")
     rows, overall = aggregate(raw, jammers, defenders)
+    runs = sorted(({"jammer": r["jammer"], "defender": r["defender"], "seed": r["seed"], "delivery_pct": r["delivery_pct"],
+                    "outage_ms": r["outage_ms"], "boost_db": r.get("boost_db", 0.0)} for r in raw),
+                  key=lambda r: (r["jammer"], r["defender"], r["seed"]))
     result = {"seed": seed, "seeds": seeds, "duration_s": duration_s, "jam_at_s": jam_at_s, "jammers": jammers,
-              "defenders": defenders, "rows": rows, "overall": overall, "elapsed_s": round(time.time() - t0, 1),
+              "defenders": defenders, "rows": rows, "overall": overall, "runs": runs,
+              "paired": paired_vs(runs, "aegis") if "aegis" in defenders else [], "elapsed_s": round(time.time() - t0, 1),
               "created": time.strftime("%Y-%m-%d %H:%M:%S")}
     result["files"] = save(result, out_dir) if out_dir else []
     return result

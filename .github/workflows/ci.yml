@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    name: Lint and tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install
+        run: pip install -r requirements-dev.txt ruff
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Tests
+        run: pytest -q
+
+  screens:
+    name: Build phone app and mission deck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Phone app
+        working-directory: mobile
+        run: npm ci && npm run build
+      - name: Mission deck
+        working-directory: intro
+        run: npm ci && npm run build

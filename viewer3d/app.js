@@ -1,4 +1,4 @@
-// AEGIS-LINK 3D simulation view. A thin client: it draws whatever the server's /ws says.
+// ABHEDYA 3D simulation view. A thin client: it draws whatever the server's /ws says.
 // Sim coordinates (x east, y north, z up, metres) -> three.js (x, y up, -z north), centred on the arena.
 // Quality: ?q=low drops grass and bloom for slow laptops.
 import * as THREE from 'three';
@@ -1178,9 +1178,10 @@ function drawCnn(m) {
 }
 
 // ================================================================ benchmark panel
-const DEF_LABEL = { none: 'No defence', fixed_hopping: 'Fixed hopping', energy: 'Energy detector', rl: 'RL agent', aegis: 'AEGIS (CNN)', hybrid: 'Hybrid (CNN + RL)' };
+const DEF_LABEL = { none: 'No defence', fixed_hopping: 'Fixed hopping', energy: 'Energy detector', fhss_keyed: 'Secret fast hopping', max_power: 'Brute force (max power)', afh_power: 'Rules, no CNN', rl: 'RL agent', aegis: 'ABHEDYA AI', hybrid: 'ABHEDYA + RL' };
 // validated categorical order on the dark surface (colour-blind and normal-vision separation checks pass)
-const DEF_COL = { none: '#3987e5', fixed_hopping: '#d95926', energy: '#199e70', rl: '#c98500', aegis: '#d55181', hybrid: '#9085e9' };
+const DEF_COL = { none: '#8d99ae', fixed_hopping: '#3987e5', energy: '#8d99ae', fhss_keyed: '#8d99ae', max_power: '#d95926', afh_power: '#199e70', rl: '#c98500', aegis: '#9085e9', hybrid: '#c9d1de' };
+const BENCH_KEY = ['fixed_hopping', 'max_power', 'afh_power', 'aegis'];   // shown when a run has more defences than fit
 let latestBench = null;
 function showBenchmark(m) {
   $('bench').classList.remove('hidden');
@@ -1194,8 +1195,9 @@ function showBenchmark(m) {
   if (m.status === 'failed') { $('bench-now').textContent = 'Benchmark failed: ' + (m.error || ''); return; }
   $('bench-progress').classList.add('hidden'); $('bench-result').classList.remove('hidden');
   $('bench-sub').textContent = `${m.seeds} seed${m.seeds > 1 ? 's' : ''} × ${m.duration_s}s runs · finished in ${m.elapsed_s}s`;
-  const defs = m.overall.map((o) => o.defender);
-  $('bench-overall').innerHTML = m.overall.map((o) => `<div class="o ${o.defender}"><span>${DEF_LABEL[o.defender]}</span>
+  let defs = m.overall.map((o) => o.defender);
+  if (defs.length > 4 && BENCH_KEY.every((d) => defs.includes(d))) defs = BENCH_KEY;
+  $('bench-overall').innerHTML = m.overall.filter((o) => defs.includes(o.defender)).map((o) => `<div class="o ${o.defender}"><span>${DEF_LABEL[o.defender] || o.defender}</span>
     <b style="color:${DEF_COL[o.defender]}">${o.delivery_pct.toFixed(1)}%</b>
     <span>worst ${o.worst_jammer_pct.toFixed(0)}% · outage ${(o.outage_ms / 1000).toFixed(1)} s${o.hop_latency_median_ms != null ? ` · hop ${o.hop_latency_median_ms.toFixed(0)}/${o.hop_latency_p95_ms.toFixed(0)} ms` : ''}${o.accuracy_pct != null ? ` · CNN ${o.accuracy_pct}%` : ''}</span></div>`).join('');
   const c = $('bench-chart'), g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
@@ -1212,7 +1214,7 @@ function showBenchmark(m) {
     });
     g.fillStyle = '#c8d6f5'; g.fillText(j, L + i * gw + gw / 2 - g.measureText(j).width / 2, B + 16);
   });
-  defs.forEach((d, k) => { g.fillStyle = DEF_COL[d]; g.fillRect(L + k * 133, 6, 10, 10); g.fillStyle = '#c8d6f5'; g.fillText(DEF_LABEL[d], L + 14 + k * 133, 15); });
+  defs.forEach((d, k) => { g.fillStyle = DEF_COL[d]; g.fillRect(L + k * 160, 6, 10, 10); g.fillStyle = '#c8d6f5'; g.fillText(DEF_LABEL[d] || d, L + 14 + k * 160, 15); });
   const head = `<tr><th>Jammer</th>${defs.map((d) => `<th>${DEF_LABEL[d]}</th>`).join('')}<th>AEGIS hop ms (med/p95)</th><th>CNN acc.</th></tr>`;
   const body = jams.map((j) => {
     const rs = defs.map((d) => m.rows.find((x) => x.jammer === j && x.defender === d));
@@ -1257,7 +1259,9 @@ function renderGallery() {
       <p>Toggle AI, compare side by side, run the benchmark and security tests.</p></div>`;
   document.querySelectorAll('.scard').forEach((c) => (c.onclick = () => { $('gallery').classList.add('hidden'); startScenario(c.dataset.id || null); }));
 }
+let wantScn;      // the mission this screen asked for (undefined until it asks): a result for another one is stale
 function startScenario(id) {
+  wantScn = id || '';
   $('report').classList.add('hidden');
   if (id) send({ action: 'load_scenario', name: id }); else if (scnId) send({ action: 'exit_scenario' });
 }
@@ -1327,6 +1331,9 @@ function onCaption(m) {
   const el = $('hud-text'); el.textContent = scnSpec?.steps?.[m.step]?.text || m.text; el.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 450 });
 }
 function showReport(m) {
+  // the server resends the last result to screens that (re)connect; if this screen has just asked for a different
+  // mission, that result is stale and must not cover the new one (found by scripts/rehearse.py)
+  if (wantScn !== undefined && wantScn !== m.scenario) return;
   lastReport = m;
   const on = m.ai_on || {}, off = m.ai_off || {}, pct = (k) => (k?.delivery_attack_pct ?? k?.delivery_pct);
   $('rep-title').textContent = `${m.title} · result`;
@@ -1402,13 +1409,15 @@ let lanUrls = [], lanPick = 0;
 function drawQr(url) {
   const q = window.qrcode(0, 'M'); q.addData(url); q.make();
   $('qr-img').innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
-  $('qr-url').textContent = url;
+  $('qr-url').textContent = url.split('#')[0] + (lanCode ? `  ·  join code ${lanCode} · then sign in` : '');
   document.querySelectorAll('#qr-ips button').forEach((b, i) => b.classList.toggle('active', i === lanPick));
 }
+let lanCode = '';
 async function openPhone() {
   $('qrcard').classList.remove('hidden');
   try {
     const r = await (await fetch('/api/lan')).json();
+    lanCode = r.join_code || '';
     const here = location.hostname;
     lanUrls = (r.app_urls || []).filter((u) => !u.includes('//127.'));
     if (here !== 'localhost' && !here.startsWith('127.')) lanUrls = [`${location.protocol}//${location.host}/app/`, ...lanUrls.filter((u) => !u.includes(here))];
@@ -1607,3 +1616,7 @@ buildEnvironment(null);
 applyTheme();
 loadScenarioCatalog().then(connect);
 requestAnimationFrame(render);
+
+// while the result card is open, the live status strip and AI switch step aside (they used to sit on top of it)
+new MutationObserver(() => document.body.classList.toggle('reporting', !$('report').classList.contains('hidden')))
+  .observe($('report'), { attributes: true, attributeFilter: ['class'] });

@@ -122,7 +122,7 @@ def _chart(rows: list[dict], duration: float) -> tuple[str, str]:
     if len(labels) == 2 and labels[1][0] - labels[0][0] < 16:   # keep end labels apart
         mid = (labels[0][0] + labels[1][0]) / 2
         labels[0][0], labels[1][0] = mid - 8, mid + 8
-    for y, txt, col in labels:
+    for y, txt, _col in labels:
         out.append(f'<text x="{L + pw + 8}" y="{y + 4:.1f}" class="lab">{_e(txt)}</text>')
     out.append("</svg>")
     # table view of the same data (every 5 s)

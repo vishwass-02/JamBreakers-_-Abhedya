@@ -305,7 +305,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         print(f"wrote {p} ({len(psd)} rows, {len(freqs)} bins, {freqs.min():.1f}-{freqs.max():.1f} MHz)")
     elif a.cmd == "capture":
         rows, labels = capture_from_sim(a.jammer, a.seconds)
-        p = save_recording(a.out, rows, BIN_CENTRES, None, labels, source="AEGIS-LINK simulator capture", simulated=True,
+        p = save_recording(a.out, rows, BIN_CENTRES, None, labels, source="ABHEDYA simulator capture", simulated=True,
                            note="Simulated, for testing the replay path. Not a real measurement.")
         print(f"wrote {p} ({len(rows)} rows)")
     else:

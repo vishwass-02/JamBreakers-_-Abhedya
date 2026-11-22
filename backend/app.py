@@ -1,10 +1,11 @@
-"""AEGIS-LINK server: one WebSocket at /ws broadcasting at ~20 Hz, plus a few HTTP endpoints.
+"""ABHEDYA server: one WebSocket at /ws broadcasting at ~20 Hz, plus a few HTTP endpoints.
 
 Run:  uvicorn backend.app:app --host 0.0.0.0 --port 8000
 """
 from __future__ import annotations
 
 import asyncio
+import collections
 import contextlib
 import json
 import logging
@@ -15,11 +16,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
+from .auth import LAPTOP, OPEN, AuthError, AuthStore, Principal, RedactTokens, is_local, origin_ok, token_from
 from .commands import parse_command
 from .config import Settings, settings as default_settings
 from .protocol import SERVER_VERSION, envelope, load_schema
@@ -41,20 +43,47 @@ def default_world_factory(cfg: Settings) -> World:
     return FakeArena(seed=cfg.seed)
 
 
-class Client:
-    """One connected screen. Messages queue per client so a slow phone never stalls the others."""
+MAX_MESSAGE_BYTES = 16_384          # the largest real command is a few hundred bytes
+MAX_COMMANDS_PER_S = 20             # per screen; a person tapping fast sends 2-3
 
-    def __init__(self, ws: WebSocket, maxsize: int):
+
+REPLACEABLE = ('"type":"state"', '"type":"spectrum"')   # superseded by the next one within 50 ms
+
+
+def _replaceable(text: str) -> bool:
+    head = text[:48]                     # the envelope starts {"v":"1.0","type":"...
+    return any(k in head for k in REPLACEABLE)
+
+
+class Client:
+    """One connected screen. Messages queue per client so a slow phone never stalls the others.
+
+    When a screen falls behind, the queue drops the oldest *replaceable* update (a world state or a spectrum frame,
+    which the next one supersedes anyway), never a one-off message: a mission report, a decision, an event or the
+    answer to this screen's own command must still arrive on a slow phone."""
+
+    def __init__(self, ws: WebSocket, maxsize: int, principal: Principal = OPEN):
         self.ws = ws
-        self.queue: asyncio.Queue[str] = asyncio.Queue(maxsize=maxsize)
+        self.principal = principal
+        self.recent: list[float] = []       # times of recent commands (rate limit)
+        self.maxsize = maxsize
+        self.buf: collections.deque[str] = collections.deque()
+        self.ready = asyncio.Event()
         self.dropped = 0
 
     def offer(self, text: str) -> None:
-        if self.queue.full():
-            with contextlib.suppress(asyncio.QueueEmpty):
-                self.queue.get_nowait()
-                self.dropped += 1
-        self.queue.put_nowait(text)
+        if len(self.buf) >= self.maxsize:
+            victim = next((k for k, t in enumerate(self.buf) if _replaceable(t)), 0)
+            del self.buf[victim]
+            self.dropped += 1
+        self.buf.append(text)
+        self.ready.set()
+
+    async def get(self) -> str:
+        while not self.buf:
+            self.ready.clear()
+            await self.ready.wait()
+        return self.buf.popleft()
 
 
 class Hub:
@@ -102,6 +131,17 @@ class Hub:
             await asyncio.sleep(max(0.0, delay))
 
     async def handle_text(self, client: Client, text: str) -> None:
+        if len(text) > MAX_MESSAGE_BYTES:
+            client.offer(json.dumps(envelope("error", "server", code="too_large",
+                                             message=f"Message too large ({len(text)} bytes, limit {MAX_MESSAGE_BYTES}).")))
+            return
+        now = time.monotonic()
+        client.recent = [t for t in client.recent if now - t < 1.0]
+        if len(client.recent) >= MAX_COMMANDS_PER_S:
+            client.offer(json.dumps(envelope("error", "server", code="rate_limited",
+                                             message="Too many commands: slow down (limit 20 per second).")))
+            return
+        client.recent.append(now)
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
@@ -117,6 +157,13 @@ class Hub:
             msg = f"Invalid command: {where}: {first.get('msg')}" if where else f"Invalid command: {first.get('msg')}"
             client.offer(json.dumps(envelope("error", "server", code="invalid_command", message=msg, **rid)))
             return
+        who = client.principal
+        if not who.can_command:
+            log.warning("refused %s from %s: view-only account", cmd.action, who.user)    # audit trail
+            client.offer(json.dumps(envelope("error", "server", code="forbidden",
+                                             message=f"'{who.user}' is a view-only account: only a commander can do that.", **rid)))
+            return
+        log.info("command %s by %s%s", cmd.action, who.user, " (laptop)" if who.local else "")   # audit trail
         try:
             async with self.lock:
                 out = self.world.handle(cmd)
@@ -168,8 +215,10 @@ def create_app(cfg: Settings | None = None, world_factory: Callable[[Settings], 
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        first_run_accounts()                 # only when the server really starts, never on import
         task = asyncio.create_task(hub.tick_loop())
-        log.info("AEGIS-LINK %s up, world=%s, %g Hz", SERVER_VERSION, cfg.world, cfg.tick_hz)
+        log.info("ABHEDYA %s up, world=%s, %g Hz, sign-in %s", SERVER_VERSION, cfg.world, cfg.tick_hz,
+                 "ON" if cfg.auth else "OFF (AEGIS_AUTH=0)")
         try:
             yield
         finally:
@@ -177,8 +226,91 @@ def create_app(cfg: Settings | None = None, world_factory: Callable[[Settings], 
             with contextlib.suppress(asyncio.CancelledError):
                 await task
 
-    app = FastAPI(title="AEGIS-LINK", version=SERVER_VERSION, lifespan=lifespan)
+    app = FastAPI(title="ABHEDYA", version=SERVER_VERSION, lifespan=lifespan)
     app.state.hub = hub
+    auth = AuthStore(cfg.users_file) if cfg.auth else None
+    app.state.auth = auth
+    for name in ("uvicorn.access", "uvicorn.error"):          # no session token ever reaches the server window
+        lg = logging.getLogger(name)
+        if not any(isinstance(f, RedactTokens) for f in lg.filters):
+            lg.addFilter(RedactTokens())
+    def first_run_accounts() -> None:
+        if auth is None:
+            return
+        try:
+            made = auth.ensure_first_run()
+        except OSError as e:                  # never stop the demo over this: sign-in simply has no accounts yet
+            log.error("could not create the first-run accounts (%s); run: python -m backend.users add commander --role commander", e)
+            return
+        if made:
+            lines = [f"  {u:<10} password: {pw}   ({role})" for u, (role, pw) in made.items()]
+            note = Path(cfg.users_file).with_name("FIRST_LOGIN.txt")
+            note.write_text("ABHEDYA first-run accounts. Write these down, then delete this file.\n"
+                            "Change a password:  python -m backend.users passwd commander\n\n" + "\n".join(lines) + "\n",
+                            encoding="utf-8")
+            print("\n  First run: created sign-in accounts for phones and other screens (also saved in "
+                  f"{note}):\n" + "\n".join(lines) + "\n", flush=True)
+
+    def principal_for(host: str | None, headers, query) -> Principal | None:
+        if auth is None:
+            return OPEN
+        if is_local(host):
+            return LAPTOP
+        return auth.check(token_from(headers, query))
+
+    PUBLIC_API = ("/api/login", "/api/logout", "/api/me")
+
+    @app.middleware("http")
+    async def guard(request: Request, call_next):
+        path = request.url.path
+        if (path.startswith("/api/") and path not in PUBLIC_API) or path.startswith("/results/"):
+            who = principal_for(request.client.host if request.client else None, request.headers, request.query_params)
+            if who is None:
+                return JSONResponse({"detail": "Sign in first.", "code": "auth_required"}, 401)
+            request.state.who = who
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        return response
+
+    @app.post("/api/login")
+    async def login(request: Request) -> JSONResponse:
+        if int(request.headers.get("content-length") or 0) > 4096:
+            return JSONResponse({"detail": "Request too large.", "code": "too_large"}, 413)
+        if not origin_ok(request.headers):
+            return JSONResponse({"detail": "Sign-in from another website is refused.", "code": "bad_origin"}, 403)
+        if auth is None:
+            return JSONResponse({"token": "", "user": "anyone", "role": "commander", "expires_in": 0})
+        try:
+            body = await request.json()
+        except ValueError:                   # not JSON at all
+            body = {}
+        if not isinstance(body, dict):       # JSON, but a list or a string
+            body = {}
+        host = request.client.host if request.client else "?"
+        try:
+            res = await asyncio.to_thread(auth.login, str(body.get("username", "")), str(body.get("password", "")), host,
+                                          body.get("join_code"), cfg.require_join_code and not is_local(host))
+        except AuthError as e:
+            log.warning("sign-in refused for %r from %s: %s", body.get("username"), host, e.code)
+            return JSONResponse({"detail": e.message, "code": e.code}, e.status)
+        log.info("signed in: %s (%s) from %s", res["user"], res["role"], host)
+        return JSONResponse(res)
+
+    @app.post("/api/logout")
+    async def logout(request: Request) -> dict[str, Any]:
+        if auth is not None:
+            auth.logout(token_from(request.headers, request.query_params))
+        return {"ok": True}
+
+    @app.get("/api/me")
+    async def me(request: Request) -> JSONResponse:
+        who = principal_for(request.client.host if request.client else None, request.headers, request.query_params)
+        if who is None:
+            return JSONResponse({"detail": "Not signed in.", "code": "auth_required",
+                                 "join_code_required": bool(cfg.require_join_code)}, 401)
+        return JSONResponse({"user": who.user, "role": who.role, "local": who.local, "auth": auth is not None})
 
     @app.middleware("http")
     async def no_stale_screens(request, call_next):
@@ -200,11 +332,17 @@ def create_app(cfg: Settings | None = None, world_factory: Callable[[Settings], 
         return JSONResponse(load_schema())
 
     @app.get("/api/lan")
-    async def lan() -> dict[str, Any]:
+    async def lan(request: Request) -> JSONResponse:
+        # the join code is shown only on the laptop: it is what proves a phone was in the room
+        if auth is not None and not request.state.who.local:
+            return JSONResponse({"detail": "Only the demo laptop can show the join QR code."}, 403)
         ips = lan_addresses()
-        return {"port": cfg.port, "ips": ips,
-                "app_urls": [f"http://{ip}:{cfg.port}/app/" for ip in ips],
-                "ws_urls": [f"ws://{ip}:{cfg.port}/ws" for ip in ips]}
+        code = auth.join_code() if auth is not None else ""
+        frag = f"#j={code}" if code else ""
+        scheme = request.url.scheme            # https when the server runs with a certificate
+        return JSONResponse({"port": cfg.port, "ips": ips, "join_code": code, "sign_in": auth is not None,
+                             "app_urls": [f"{scheme}://{ip}:{cfg.port}/app/{frag}" for ip in ips],
+                             "ws_urls": [f"{'wss' if scheme == 'https' else 'ws'}://{ip}:{cfg.port}/ws" for ip in ips]})
 
     @app.get("/api/scenarios")
     async def scenarios() -> JSONResponse:
@@ -264,13 +402,30 @@ def create_app(cfg: Settings | None = None, world_factory: Callable[[Settings], 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
         await ws.accept()
-        client = Client(ws, cfg.client_queue)
+        if not origin_ok(ws.headers):
+            log.warning("WebSocket refused: opened by a page from %s", ws.headers.get("origin"))
+            await ws.send_text(json.dumps(envelope("error", "server", code="bad_origin",
+                                                   message="This connection was opened by another website and is refused.")))
+            await ws.close(code=4403)
+            return
+        who = principal_for(ws.client.host if ws.client else None, ws.headers, ws.query_params)
+        if who is None:
+            await ws.send_text(json.dumps(envelope("error", "server", code="auth_required",
+                                                   message="Sign in first: scan the QR code on the laptop.")))
+            await ws.close(code=4401)
+            return
+        client = Client(ws, cfg.client_queue, who)
         client.offer(json.dumps(hub.hello()))
+        # a screen that (re)connects after a mission ended still gets its result: a slow phone or a Wi-Fi blip
+        # during the last seconds must not lose the report (seen in the automated rehearsal)
+        done = getattr(hub.world, "finished_report", None)
+        if done:
+            client.offer(json.dumps(done))
         hub.clients.add(client)
 
         async def sender() -> None:
             while True:
-                text = await client.queue.get()
+                text = await client.get()
                 await ws.send_text(text)
 
         send_task = asyncio.create_task(sender())
@@ -287,6 +442,15 @@ def create_app(cfg: Settings | None = None, world_factory: Callable[[Settings], 
             send_task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await send_task
+
+    # ---- sign-in page and the small script every screen loads first ----
+    @app.get("/auth.js", include_in_schema=False)
+    async def auth_js() -> FileResponse:
+        return FileResponse(STATIC / "auth.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/login", include_in_schema=False)
+    async def login_page() -> FileResponse:
+        return FileResponse(STATIC / "login.html", headers={"Cache-Control": "no-cache"})
 
     # ---- static screens ----
     @app.get("/favicon.ico", include_in_schema=False)

@@ -1,4 +1,4 @@
-"""AEGIS-LINK defender: sense -> classify -> decide.
+"""ABHEDYA defender: sense -> classify -> decide.
 
 Trigger: packet loss over the last 5 slots above 10 %. Then capture 3 spectrogram windows at the
 receiver that is losing packets, run the CNN on each and average (the 3-window vote), and respond:

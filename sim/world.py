@@ -21,11 +21,12 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 import numpy as np
+from cryptography.exceptions import InvalidSignature, InvalidTag
 
 from backend import commands as C
 from backend.protocol import ARENA_BOUNDS, CHANNELS_MHZ, CNN_CLASSES, FFT_BINS, F_START_MHZ, F_STOP_MHZ, JAMMER_TYPES, envelope
 
-from .defenders import Action, Decision, Defender, SlotObs, make_defender
+from .defenders import Decision, Defender, SlotObs, make_defender
 from .safety import SafetyGuard
 from . import battery as bat
 from .keymgmt import KeyManager, SessionReceiver
@@ -34,12 +35,13 @@ from .qos import QoSLayer
 from .timesync import GUARD_S, TimeSync
 from .hopping import fixed_channel, keyed_channel, rendezvous_channel
 from .jammers import Jammer, SlotCtx, make_jammer
+from . import __version__
 from .network import ARENA_OBSTACLES, LIVE_TRUCK_SPEEDS, Network, Node, arena_nodes
 from .phy import EmitterSpec, Phy, get_phy
 from . import security as sec
 from . import scenarios as scn
 from .radio import (
-    N_CH, NOISE_INBAND_DBM, POWER_CAP_DB, RICIAN_K_DB_AIR, SLOT_S, TX_POWER_DBM, WINDOW_S, channel_offset_hz,
+    N_CH, NOISE_INBAND_DBM, POWER_CAP_DB, SLOT_S, TX_POWER_DBM, channel_offset_hz,
     dbm_to_mw, mw_to_dbm,
 )
 
@@ -139,8 +141,9 @@ class SimWorld:
         self.recent_channels: deque[int] = deque(maxlen=3)
         self.anti_follow = False
         self.pending: Optional[Pending] = None
-        self.net.tx_boost_db = 0.0
-        self.net.modulation = "QPSK"
+        self.net.tx_boost_db = getattr(self.defender, "initial_boost_db", 0.0)
+        self.net.modulation = getattr(self.defender, "initial_modulation", "QPSK")
+        self.boost_slots = 0.0           # sum of tx boost (dB) over slots: how much extra power the defence spends
         had_relay = any(n.kind == "relay" for n in self.net.nodes)
         self.net.remove_relays()
         if had_relay and hasattr(self.net, "positions"):
@@ -226,12 +229,12 @@ class SimWorld:
         """What every radio does with an order: check the CP signature, then decrypt with the group key."""
         try:
             self.km.public.verify(sig, frame)
-        except Exception:
+        except InvalidSignature:
             return False, "order not signed by the command post"
         hdr = sec.HEADER.unpack(frame[:sec.HEADER_LEN])
         try:
             self.km.group.aead(self.epoch).decrypt(sec.nonce(hdr[2], self.epoch, hdr[5]), frame[sec.HEADER_LEN:], frame[:sec.HEADER_LEN])
-        except Exception:
+        except InvalidTag:
             return False, "order does not decrypt with the current group key"
         return True, "verified"
 
@@ -631,7 +634,7 @@ class SimWorld:
         try:
             guess.aead(epoch).decrypt(sec.nonce(src, epoch, hdr[5]), legit[10:], legit[:10])
             learnt = "decrypted (should never happen)"
-        except Exception:
+        except InvalidTag:
             learnt = "nothing: decryption with a guessed key fails the tag check"
         self.rx.open(legit, epoch)
         return {"test": "eavesdrop", "accepted": False,
@@ -773,8 +776,8 @@ class SimWorld:
             self.jammers.clear()
             self._started.clear()
             self._clear_pending = False
-            self.net.tx_boost_db = 0.0
-            self.net.modulation = "QPSK"
+            self.net.tx_boost_db = getattr(self.defender, "initial_boost_db", 0.0)
+            self.net.modulation = getattr(self.defender, "initial_modulation", "QPSK")
             self.blacklist.clear()
             self.jam_start = None
             self.resp_start = None
@@ -903,6 +906,7 @@ class SimArena:
         self.mission = 1
         self.log = MissionLog()
         self.last_report: Optional[dict] = None
+        self.finished_report: Optional[dict] = None    # the result on screen right now: resent to screens that (re)connect
         self.replay: Optional[dict] = None      # recorded spectrum feeding the CNN panel (ai/sources.py)
         self.overrun_ticks = 0                 # ticks that hit the CPU budget (shown in /health)
         self._ticks = 0
@@ -921,6 +925,7 @@ class SimArena:
             self._notice = None
 
     def _build(self, relaunch_after_s: Optional[float] = None) -> None:
+        self.finished_report = None          # a new or restarted run: the old result is no longer on screen
         if self.view == "single":
             self.worlds = {"main": SimWorld("main", self.seed, AI_ON_DEFENDER if self.ai_enabled else AI_OFF_DEFENDER, self.phy,
                                             mission=self.mission, scenario=self.scenario, live=True)}
@@ -951,7 +956,7 @@ class SimArena:
     # ---------- World protocol ----------
     def hello_info(self) -> dict[str, Any]:
         w = next(iter(self.worlds.values()))
-        return {"server_version": "0.2.0", "schema_version": "1.0", "world_source": "sim", "signal_backend": self.phy.name,
+        return {"server_version": __version__, "schema_version": "1.0", "world_source": "sim", "signal_backend": self.phy.name,
                 "channels_mhz": CHANNELS_MHZ, "fft_bins": FFT_BINS, "bounds": ARENA_BOUNDS,
                 "jammer_types": list(JAMMER_TYPES), "classes": CNN_CLASSES,
                 "leaderboard": [{"player": p, "attacks": n} for p, n in sorted(self.leaderboard.items(), key=lambda kv: -kv[1])],
@@ -963,8 +968,8 @@ class SimArena:
                 "scenarios": scn.ids()}
 
     def _start_benchmark(self, seed: Optional[int], seeds: int, duration_s: float, quick: bool) -> None:
-        from .benchmark import DEFENDERS, run_benchmark
-        defenders = ["fixed_hopping", "aegis"] if quick else DEFENDERS
+        from .benchmark import run_benchmark
+        defenders = ["fixed_hopping", "aegis"] if quick else ["fixed_hopping", "max_power", "afh_power", "aegis"]   # the fair line-up
         workers = max(1, min(3, (os.cpu_count() or 2) - 2))       # leave cores for the live demo
         seed = self.seed if seed is None else seed
 
@@ -986,7 +991,7 @@ class SimArena:
                 a = next(o for o in res["overall"] if o["defender"] == "aegis")
                 f = next(o for o in res["overall"] if o["defender"] == "fixed_hopping")
                 self._bench_q.put(envelope("event", SRC, level="good",
-                                           text=f"Benchmark done: AEGIS-LINK {a['delivery_pct']}% delivered vs fixed hopping "
+                                           text=f"Benchmark done: ABHEDYA {a['delivery_pct']}% delivered vs fixed hopping "
                                                 f"{f['delivery_pct']}%, beating it on {a['wins_vs_fixed']}/{len(res['jammers'])} jammer types. Saved CSV and JSON."))
             except Exception as exc:                                  # never take the live demo down
                 log.exception("benchmark failed")
@@ -1107,11 +1112,14 @@ class SimArena:
         if off:
             msg["ai_off"] = off
         # snapshot for the downloadable report (/api/report): kept until the next mission finishes
+        self.finished_report = msg
         self.last_report = {"msg": msg, "scenario": sc, "finished_wall": time.time(), "speed": self.speed,
                             "rows": [dict(r) for r in self.log.rows], "csv": self.log.to_csv(), "log": self.log.summary()}
         return msg
 
     def handle(self, cmd: C.Command) -> list[dict]:
+        if isinstance(cmd, (C.LoadScenario, C.ExitScenario, C.Restart, C.SetView, C.Play)):
+            self.finished_report = None      # the screen moves on from the result card
         out = self._handle(cmd)
         if not isinstance(cmd, (C.LoadScenario, C.ExitScenario, C.Restart, C.SetView)):   # those start a fresh log
             self.log.observe(out, next(iter(self.worlds.values())).t)
@@ -1148,7 +1156,7 @@ class SimArena:
             on = (self.focus != "ai_on") if cmd.enabled is None else cmd.enabled
             self.focus, self.focus_manual = ("ai_on" if on else "ai_off"), True
             return [envelope("event", SRC, level="info", focus=self.focus, **rid,
-                             text=f"Showing AI {'ON (AEGIS-LINK)' if on else 'OFF (conventional fixed hopping)'}. Both keep running on the same attack.")]
+                             text=f"Showing AI {'ON (ABHEDYA)' if on else 'OFF (conventional fixed hopping)'}. Both keep running on the same attack.")]
         if isinstance(cmd, C.ToggleAI):
             self.ai_enabled = (not self.ai_enabled) if cmd.enabled is None else cmd.enabled
             if "main" in self.worlds:
@@ -1223,7 +1231,7 @@ class SimArena:
             seeds = 1 if cmd.quick else (cmd.seeds or 3)
             dur = cmd.duration_s or 12.0
             self._start_benchmark(cmd.seed, seeds, dur, bool(cmd.quick))
-            what = "fixed hopping vs AEGIS-LINK" if cmd.quick else "no defence, fixed hopping, energy detector and AEGIS-LINK"
+            what = "fixed hopping vs ABHEDYA" if cmd.quick else "fixed hopping, brute force, rule-based (no CNN) and ABHEDYA"
             return [ev("info", f"Benchmark started: every jammer type × {seeds} seed{'s' if seeds > 1 else ''}, {what}, "
                                f"identical seeded runs of {dur:.0f} s. The live demo keeps running."),
                     envelope("benchmark", SRC, status="running", progress=0.0, seeds=seeds, placeholder=False, **rid)]

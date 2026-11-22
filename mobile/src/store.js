@@ -1,3 +1,4 @@
+import { signOut, whoAmI, withToken } from './auth.js';
 // One WebSocket to the laptop, shared by every tab. Auto-reconnects; re-renders at most ~10x per second.
 import { useSyncExternalStore } from 'react';
 
@@ -21,7 +22,7 @@ export const JAMMERS = ['barrage', 'random', 'sweep', 'reactive', 'deceptive', '
 export const TACTIC_TXT = { follow: 'following our channel', predict: 'predicting our next hop', wide: 'spreading over 3 channels', pulse: 'pulsing at high power', spoof: 'spoofing our frames' };
 
 const S = {
-  conn: 'connecting', url: '', retries: 0,
+  conn: 'connecting', url: '', retries: 0, auth: 'checking', me: null,
   hello: null, states: {}, spectra: {}, waterfall: {},
   decisions: [], alerts: [], security: [], bench: null, report: null, caption: null,
   leaderboard: [], toast: null, lastVerdict: {},
@@ -115,8 +116,9 @@ const fmt = (v) => (v == null ? '—' : `${v.toFixed(1)} %`);
 
 // ---------- connection
 function wsUrl() {
-  if (S.server) return S.server.replace(/^http/, 'ws').replace(/\/+$/, '') + '/ws';
-  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+  const u = S.server ? S.server.replace(/^http/, 'ws').replace(/\/+$/, '') + '/ws'
+    : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+  return withToken(u);
 }
 export function connect() {
   clearTimeout(timer);
@@ -127,7 +129,11 @@ export function connect() {
   ws = sock;
   sock.onopen = () => { if (ws !== sock) return; S.conn = 'online'; S.retries = 0; notify(true); };
   sock.onmessage = (e) => { try { onMessage(JSON.parse(e.data)); } catch { /* ignore bad frame */ } };
-  sock.onclose = () => { if (ws !== sock) return; S.conn = 'offline'; notify(true); retry(); };
+  sock.onclose = (e) => {
+    if (ws !== sock) return;
+    if (e.code === 4401) { S.auth = 'needed'; S.conn = 'offline'; notify(true); return; }   // signed out / session expired
+    S.conn = 'offline'; notify(true); retry();
+  };
   sock.onerror = () => { try { sock.close(); } catch { /* ignore */ } };
 }
 function retry() { S.retries++; timer = setTimeout(connect, Math.min(5000, 400 * 2 ** Math.min(S.retries, 4))); }
@@ -135,9 +141,21 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S.
 
 export function send(action, fields = {}) {
   if (!ws || ws.readyState !== 1) { toast('Not connected to the laptop yet.', 'alert'); return false; }
+  if (action === 'load_scenario' || action === 'restart' || action === 'exit_scenario') S.report = null;   // that result is over
   ws.send(JSON.stringify({ type: 'cmd', id: `m${++seq}`, player: S.player || undefined, action, ...fields }));
   return true;
 }
+/** check the session, then connect; the app shows the sign-in screen while S.auth === 'needed' */
+export async function start() {
+  const r = await whoAmI(apiBase());
+  if (r.ok) { S.me = r.me; S.auth = 'ok'; notify(true); connect(); return; }
+  if (r.reason === 'auth') { S.auth = 'needed'; notify(true); return; }
+  S.auth = 'ok'; notify(true); connect();            // laptop unreachable right now: the socket keeps retrying
+}
+export function signedIn(me) { S.me = me; S.auth = 'ok'; S.retries = 0; notify(true); connect(); }
+export async function logOut() { try { ws?.close(); } catch { /* ignore */ } await signOut(apiBase()); S.me = null; S.auth = 'needed'; notify(true); }
+export const apiBase = () => (S.server ? S.server.replace(/\/+$/, '') : '');
+
 export function setPref(key, val) {
   S[key] = val; SAVE('aegis.' + key, val); notify(true);
   if (key === 'server') { S.retries = 0; connect(); }

@@ -44,6 +44,8 @@ BROADCAST = 0xFF
 
 def mission_key(seed: int, mission: int) -> bytes:
     """Simulation stand-in for the key loader: deterministic per (seed, mission)."""
+    # "AEGIS-LINK" labels below are fixed protocol constants (domain separation), kept from before the ABHEDYA
+    # rename: changing them would change every key, hop sequence and published result.
     return hashlib.sha256(b"AEGIS-LINK mission key|" + str(seed).encode() + b"|" + str(mission).encode()).digest()
 
 

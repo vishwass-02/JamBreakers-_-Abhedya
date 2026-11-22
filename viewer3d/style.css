@@ -305,3 +305,4 @@ a.btnlink:hover { border-color: var(--cyan); }
 
 /* report card: full-width download button */
 .report .row button.wide { flex: 1 1 100%; }
+body.reporting #modebar, body.reporting #split .strip { display: none !important; }

@@ -21,9 +21,9 @@ SPS = 40
 
 class AegisChain(gr.top_block, Qt.QWidget):
     def __init__(self, jammer: str):
-        gr.top_block.__init__(self, "AEGIS-LINK receiver chain")
+        gr.top_block.__init__(self, "ABHEDYA receiver chain")
         Qt.QWidget.__init__(self)
-        self.setWindowTitle(f"AEGIS-LINK · GNU Radio chain · jammer: {jammer}")
+        self.setWindowTitle(f"ABHEDYA · GNU Radio chain · jammer: {jammer}")
         layout = Qt.QVBoxLayout(self)
 
         src = analog.random_uniform_source_b(0, 256, 0)

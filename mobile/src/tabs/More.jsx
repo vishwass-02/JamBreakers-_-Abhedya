@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useStore, send, setPref, store } from '../store.js';
+import { useStore, send, setPref, store, logOut } from '../store.js';
+import { api, withToken } from '../auth.js';
 import { Reveal } from '../ui.jsx';
 import Signal from './Signal.jsx';
 
@@ -37,7 +38,7 @@ export default function More() {
   const [name, setName] = useState(S.player);
   const [bench, setBench] = useState(null);
   const [server, setServer] = useState(S.server);
-  useEffect(() => { fetch('/api/benchmark/latest').then((r) => (r.ok ? r.json() : null)).then(setBench).catch(() => {}); }, [S.bench?.status]);
+  useEffect(() => { api('', '/api/benchmark/latest').then((r) => (r.ok ? r.json() : null)).then(setBench).catch(() => {}); }, [S.bench?.status]);
   const b = S.bench?.status === 'done' ? S.bench : bench;
   const running = S.bench && S.bench.status === 'running';
   const sec = S.security[0];
@@ -85,6 +86,12 @@ export default function More() {
 
       <Reveal label="Signal analysis (expert)"><Signal /></Reveal>
 
+      {S.me && !S.me.local && (
+        <div className="card account">
+          <span>Signed in as <b>{S.me.user}</b> · {S.me.role === 'commander' ? 'can control missions' : 'view only'}</span>
+          <button className="btn" onClick={logOut}>Sign out</button>
+        </div>
+      )}
       <Reveal label="Settings">
         <section className="card">
           <label className="toggle-row"><span><b>Vibrate on alerts</b></span>
@@ -92,8 +99,8 @@ export default function More() {
           <p className="small"><b>Laptop address</b></p>
           <div className="inrow"><input value={server} placeholder={`${location.host} (this page)`} onChange={(e) => setServer(e.target.value)} />
             <button onClick={() => setPref('server', server.trim())}>Connect</button></div>
-          <p className="muted small">Connected to <code>{S.url.replace(/^wss?:\/\//, '').replace('/ws', '')}</code> · {S.conn}</p>
-          <a className="btn" href="/api/mission-log" download>Download the mission log</a>
+          <p className="muted small">Connected to <code>{S.url.split('?')[0].replace(/^wss?:\/\//, '').replace('/ws', '')}</code> · {S.conn}</p>
+          <a className="btn" href={withToken('/api/mission-log')} download>Download the mission log</a>
           {installEvt && <button className="primary" onClick={() => installEvt.prompt()}>Install ABHEDYA on this phone</button>}
           <p className="muted small">Key fingerprint <code>{fp || '—'}</code></p>
         </section>
@@ -114,10 +121,12 @@ function aiOff(ai, off) {
 }
 
 function BenchTable({ b }) {
-  const defs = [...new Set(b.rows.map((r) => r.defender))];
+  const all = [...new Set(b.rows.map((r) => r.defender))];
+  const KEY = ['fixed_hopping', 'max_power', 'afh_power', 'aegis'];
+  const defs = all.length > 4 && KEY.every((d) => all.includes(d)) ? KEY : all;
   const types = [...new Set(b.rows.map((r) => r.jammer))];
   const get = (j, d) => b.rows.find((r) => r.jammer === j && r.defender === d);
-  const name = { none: 'None', fixed_hopping: 'Fixed', energy: 'Energy', rl: 'RL', aegis: 'AEGIS', hybrid: 'Hybrid' };
+  const name = { none: 'None', fixed_hopping: 'Fixed', energy: 'Energy', fhss_keyed: 'Secret hop', max_power: 'Brute force', afh_power: 'Rules', rl: 'RL', aegis: 'AI', hybrid: 'AI+RL' };
   const val = (r) => r?.delivery_attack_pct ?? r?.delivery_pct;
   return (
     <div className="bench-wrap"><table className="bench"><thead><tr><th>Jammer</th>{defs.map((d) => <th key={d}>{name[d] || d}</th>)}</tr></thead>

@@ -1,5 +1,5 @@
 @echo off
-REM AEGIS-LINK - Windows run script. Creates .venv on first run, stops any older AEGIS-LINK server, then starts.
+REM ABHEDYA - Windows run script. Creates .venv on first run, stops any older ABHEDYA server, then starts.
 cd /d "%~dp0"
 
 if not exist .venv\Scripts\python.exe (
@@ -20,12 +20,22 @@ for %%P in (8000 8001) do (
 )
 
 echo.
-echo  AEGIS-LINK starting on http://localhost:8000
+echo  ABHEDYA starting on http://localhost:8000
 echo    Mission deck ... http://localhost:8000/intro/   ^(start here^)
 echo    3D view ........ http://localhost:8000/viewer/
 echo    Judges' screen . http://localhost:8000/demo
 echo    Phone app ...... scan the QR code (Phone button), or see http://localhost:8000/api/lan
 echo  If phones cannot connect: allow Python through Windows Firewall on PRIVATE networks.
+echo  Phones sign in with a user ID and password (accounts: python -m backend.users list).
+echo  Before presenting, run check_demo.bat once.
 echo.
+REM Optional HTTPS: put a certificate in data\cert.pem and data\key.pem (for example made with mkcert) and the
+REM server uses it, so passwords never cross the Wi-Fi in clear text.
+if exist data\cert.pem if exist data\key.pem (
+  echo  HTTPS on: open https://localhost:8000
+  .venv\Scripts\python.exe -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --ssl-certfile data\cert.pem --ssl-keyfile data\key.pem
+  goto :end
+)
 .venv\Scripts\python.exe -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
+:end
 pause

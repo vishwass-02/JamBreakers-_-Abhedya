@@ -1,7 +1,7 @@
 """Hop sequences.
 
 FIXED_PATTERN is the conventional FHSS baseline: a public, repeating pattern (anyone who watches for
-8 slots knows it). keyed_channel() is AEGIS-LINK's sequence: both ends compute
+8 slots knows it). keyed_channel() is ABHEDYA's sequence: both ends compute
 HMAC-SHA256(key, slot) and map it onto the channels that are not blacklisted, so they always agree
 and a jammer without the key cannot predict it.
 """
